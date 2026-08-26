@@ -1,0 +1,9 @@
+{
+  "name": "Prabodhan Bag Production Operations",
+  "short_name": "PB Operations",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#13213a",
+  "description": "Simple production and order tracking for Prabodhan Bag"
+}
