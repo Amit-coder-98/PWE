@@ -41,8 +41,12 @@ def initial_stages() -> dict[str, dict]:
 
 
 def assert_permission(role: Role, stage: StageKey) -> None:
-    if role != Role.ADMIN and STAGE_ROLES[stage] != role:
-        raise HTTPException(403, "Your role cannot update this workflow step.")
+    owner = STAGE_ROLES[stage]
+    if owner != role:
+        raise HTTPException(
+            403,
+            f"This step belongs to the {owner.value.replace('_', ' ')}. Ask that team member to update it.",
+        )
 
 
 def ready(order: dict, stage: StageKey) -> bool:

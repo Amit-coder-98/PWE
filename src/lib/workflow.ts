@@ -32,7 +32,9 @@ export function isReady(order: Order, stage: StageKey) {
 }
 
 export function canManageStage(role: Role, stage: StageKey) {
-  return role === 'admin' || stageInfo[stage].role === role
+  // Admin can supervise every order, but operational facts must be entered by
+  // the department that performed the work (for example, stock by Material).
+  return stageInfo[stage].role === role
 }
 
 export function statusLabel(status: StageStatus) {

@@ -65,6 +65,16 @@ def create_order(client: TestClient, headers: dict):
     return order.json()
 
 
+def add_staff(repository: MongoRepository, user_id: str, role: str, email: str):
+    timestamp = datetime.now(timezone.utc)
+    repository.create_user({
+        "id": user_id, "name": f"Test {role.replace('_', ' ').title()}", "email": email, "role": role,
+        "department": role.replace("_", " ").title(), "initials": "TS",
+        "passwordHash": PasswordHash.recommended().hash("Temporary123!"), "active": True,
+        "mustChangePassword": False, "failedLoginCount": 0, "createdAt": timestamp, "updatedAt": timestamp,
+    })
+
+
 def test_empty_database_and_secure_login(system):
     client, repository = system
     assert repository.list_orders() == []
@@ -88,12 +98,9 @@ def test_csrf_and_role_protection(system):
     headers = login(client)
     order = create_order(client, headers)
     assert client.post(f"/api/orders/{order['id']}/stages/material", json={"action": "start", "expectedVersion": 1}).status_code == 403
-    timestamp = datetime.now(timezone.utc)
-    repository.create_user({
-        "id": "designer", "name": "Test Designer", "email": "designer@test.example.com", "role": "designer", "department": "Design",
-        "initials": "TD", "passwordHash": PasswordHash.recommended().hash("Temporary123!"), "active": True,
-        "mustChangePassword": False, "failedLoginCount": 0, "createdAt": timestamp, "updatedAt": timestamp,
-    })
+    admin_denied = client.post(f"/api/orders/{order['id']}/stages/material", headers=headers, json={"action": "start", "expectedVersion": 1})
+    assert admin_denied.status_code == 403
+    add_staff(repository, "designer", "designer", "designer@test.example.com")
     client.post("/api/auth/logout", headers=headers)
     designer_headers = login(client, "designer@test.example.com")
     denied = client.post(f"/api/orders/{order['id']}/stages/material", headers=designer_headers, json={"action": "start", "expectedVersion": 1})
@@ -135,9 +142,12 @@ def test_design_upload_and_customer_rejection_requires_reason(system):
 
 
 def test_workflow_confirmation_endpoint_version_conflict(system):
-    client, _ = system
+    client, repository = system
     headers = login(client)
     order = create_order(client, headers)
+    add_staff(repository, "inventory", "inventory_manager", "inventory@test.example.com")
+    client.post("/api/auth/logout", headers=headers)
+    headers = login(client, "inventory@test.example.com")
     started = client.post(f"/api/orders/{order['id']}/stages/material", headers=headers, json={"action": "start", "expectedVersion": 1})
     assert started.status_code == 200
     stale = client.post(f"/api/orders/{order['id']}/stages/material", headers=headers, json={"action": "complete", "expectedVersion": 1})

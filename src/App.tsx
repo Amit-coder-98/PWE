@@ -1331,7 +1331,9 @@ function OrderDetailPage() {
             );
           }}
         >
-          Open next action
+          {canManageStage(currentUser.role, order.currentStage)
+            ? "Open next action"
+            : `View ${roleLabels[stageInfo[order.currentStage].role]} step`}
           <ChevronRight className="size-4" />
         </button>
       </section>
@@ -2110,7 +2112,7 @@ function TeamPage() {
       <Heading
         eyebrow="People and permissions"
         title="Team accounts"
-        description="Create only the accounts each employee needs. Permissions are enforced by FastAPI."
+        description="Admin can see every order. Each department enters its own stock, production, payment, and dispatch updates."
         action={
           <button className="primary-button" onClick={() => setOpen(true)}>
             <Plus className="size-4" />
