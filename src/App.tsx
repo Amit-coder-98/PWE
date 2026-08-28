@@ -1363,21 +1363,24 @@ function OrderDetailPage() {
           <ChevronRight className="size-4" />
         </button>
       </section>
-      {(currentUser.role === "admin" ||
-        currentUser.role === "designer" ||
-        currentUser.role === "order_manager") && (
+      {currentUser.role === "designer" && (
         <DesignWorkspace order={order} setOrder={setOrder} reload={reload} />
       )}
-      <div className="mt-4">
-        <WorkflowMap
-          order={order}
-          onSelect={(stage) => {
-            setSelected(stage);
-            setQuantity(order.stages[stage].completedQuantity ?? "");
-            setNote(order.stages[stage].note ?? "");
-          }}
-        />
-      </div>
+      <details className="surface mt-4">
+        <summary className="min-h-14 cursor-pointer px-5 py-4 font-bold text-navy-900">
+          View full order workflow and history
+        </summary>
+        <div className="border-t border-slate-200 p-4">
+          <WorkflowMap
+            order={order}
+            onSelect={(stage) => {
+              setSelected(stage);
+              setQuantity(order.stages[stage].completedQuantity ?? "");
+              setNote(order.stages[stage].note ?? "");
+            }}
+          />
+        </div>
+      </details>
       <section className="mt-4 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
         <div className="surface p-5">
           <h2 className="font-bold text-navy-900">Customer and order</h2>
@@ -1495,6 +1498,22 @@ function OrderDetailPage() {
                 >
                   Start this work
                 </button>
+              )}
+              {manage && state.status === "in_progress" && selected === "design" && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+                  <strong>Finish design in the Design approval section.</strong>
+                  <br />Choose <em>No customer image</em>, or upload the design and send it to the customer for approval. Design is completed only after that approval.
+                  <button
+                    className="primary-button mt-3 w-full"
+                    onClick={() => {
+                      setSelected(null);
+                      window.setTimeout(() => document.getElementById("design-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+                    }}
+                  >
+                    Continue to design approval
+                    <ChevronRight className="size-4" />
+                  </button>
+                </div>
               )}
               {manage &&
                 state.status === "in_progress" &&
@@ -1804,7 +1823,7 @@ function DesignWorkspace({
     }
   };
   return (
-    <section className="surface mt-4 p-5">
+    <section className="surface mt-4 p-5" id="design-workspace">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="eyebrow">Optional artwork</p>
@@ -1812,7 +1831,7 @@ function DesignWorkspace({
             Design versions and approval
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Upload a new version without replacing previous customer decisions.
+            Choose one: confirm no image was supplied, or upload a design version and send it for customer approval.
           </p>
         </div>
         {order.stages.design.status !== "completed" && (
