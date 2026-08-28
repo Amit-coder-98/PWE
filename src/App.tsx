@@ -39,7 +39,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { StatusBadge } from "./components/StatusBadge";
 import { ToastHost } from "./components/ToastHost";
 import { WorkflowMap } from "./components/WorkflowMap";
-import { api } from "./lib/api";
+import { api, ApiError } from "./lib/api";
 import {
   canManageStage,
   nextInstruction,
@@ -2046,6 +2046,7 @@ function TeamPage() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [role, setRole] = useState<Role>("order_manager");
   const [managedUser, setManagedUser] = useState<User | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState("");
@@ -2056,6 +2057,7 @@ function TeamPage() {
     event.preventDefault();
     setBusy(true);
     setError("");
+    setFieldErrors({});
     const form = new FormData(event.currentTarget);
     try {
       await createUser({
@@ -2067,9 +2069,9 @@ function TeamPage() {
       });
       setOpen(false);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not create account.",
-      );
+      const fields = err instanceof ApiError ? err.fields : [];
+      setFieldErrors(Object.fromEntries(fields.map((field) => [field.field, field.message])));
+      setError(fields.length ? "Please correct the highlighted information." : err instanceof Error ? err.message : "Could not create account.");
     } finally {
       setBusy(false);
     }
@@ -2160,8 +2162,15 @@ function TeamPage() {
       {open && (
         <Modal title="Create staff account" close={() => setOpen(false)}>
           <form onSubmit={submit}>
-            <Field name="name" label="Full name" required />
-            <Field name="email" label="Work email" type="email" required />
+            <Field name="name" label="Full name" required error={fieldErrors.name} />
+            <Field
+              name="email"
+              label="Work email"
+              type="email"
+              placeholder="material.manager@example.com"
+              required
+              error={fieldErrors.email}
+            />
             <label className="label mt-4">Role</label>
             <select
               className="field"
@@ -2189,7 +2198,9 @@ function TeamPage() {
               type="password"
               minLength={10}
               required
+              error={fieldErrors.temporaryPassword}
             />
+            <p className="mt-2 text-xs text-slate-500">Use a real email format and a password of at least 10 characters.</p>
             {error && <ErrorText>{error}</ErrorText>}
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button
@@ -2535,17 +2546,28 @@ function Field({
   name,
   label,
   type = "text",
+  error,
   ...props
 }: {
   name: string;
   label: string;
   type?: string;
+  error?: string;
   [key: string]: unknown;
 }) {
+  const errorId = `${name}-error`;
   return (
     <label>
       <span className="label mt-4">{label}</span>
-      <input className="field" name={name} type={type} {...props} />
+      <input
+        className={`field ${error ? "border-red-400 bg-red-50 focus:border-red-500 focus:ring-red-100" : ""}`}
+        name={name}
+        type={type}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        {...props}
+      />
+      {error && <span id={errorId} className="mt-1 block text-sm font-medium text-red-700">{error}</span>}
     </label>
   );
 }
