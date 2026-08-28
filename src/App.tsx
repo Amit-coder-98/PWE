@@ -347,8 +347,9 @@ const nav = [
   { to: "/more", label: "More", mr: "अधिक", icon: Menu },
 ];
 function Shell({ children }: { children: ReactNode }) {
-  const { currentUser, orders } = useApp();
+  const { currentUser, orders, logout } = useApp();
   const [drawer, setDrawer] = useState(false);
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [lang, setLang] = useState<"en" | "mr">(() =>
     localStorage.getItem("pb-language") === "mr" ? "mr" : "en",
   );
@@ -415,6 +416,13 @@ function Shell({ children }: { children: ReactNode }) {
             onClick={toggleLanguage}
           >
             {lang === "en" ? "मराठीमध्ये पहा" : "View in English"}
+          </button>
+          <button
+            className="mt-1 flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white"
+            onClick={() => setLogoutConfirm(true)}
+          >
+            <LogOut className="size-4" />
+            Log out
           </button>
         </div>
       </aside>
@@ -513,9 +521,27 @@ function Shell({ children }: { children: ReactNode }) {
             >
               {lang === "en" ? "मराठी" : "English"}
             </button>
+            <button
+              className="secondary-button mt-3 w-full text-red-700"
+              onClick={() => {
+                setDrawer(false);
+                setLogoutConfirm(true);
+              }}
+            >
+              <LogOut className="size-4" />
+              Log out
+            </button>
           </aside>
         </div>
       )}
+      <ConfirmDialog
+        open={logoutConfirm}
+        title="Log out now?"
+        message="You will need to sign in again before you can view or update factory information."
+        confirmLabel="Yes, log out"
+        onCancel={() => setLogoutConfirm(false)}
+        onConfirm={() => void logout()}
+      />
     </div>
   );
 }
