@@ -1,114 +1,174 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
-import { demoOrders, demoUsers } from '../data/demo'
-import { apiEnabled, apiLogin, apiUpdateStage, clearApiSession } from '../lib/api'
-import { deriveOrder } from '../lib/workflow'
-import type { AppData, Order, StageKey, User } from '../types'
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { api, ApiError } from "../lib/api";
+import type { Customer, Order, StageKey, User } from "../types";
 
-const STORAGE_KEY = 'pb-production-v1'
-
-interface AppContextValue extends AppData {
-  users: User[]
-  login: (email: string, password: string) => Promise<string | null>
-  logout: () => void
-  resetDemo: () => void
-  updateStage: (orderId: string, stage: StageKey, action: 'start' | 'complete' | 'progress' | 'resolve', quantity?: number) => void
+interface AppContextValue {
+  currentUser: User | null;
+  orders: Order[];
+  customers: Customer[];
+  users: User[];
+  loading: boolean;
+  serviceError: string | null;
+  login: (email: string, password: string) => Promise<string | null>;
+  logout: () => Promise<void>;
+  reload: () => Promise<void>;
+  createCustomer: (
+    data: Parameters<typeof api.createCustomer>[0],
+  ) => Promise<Customer>;
+  createOrder: (data: Parameters<typeof api.createOrder>[0]) => Promise<Order>;
+  createUser: (data: Parameters<typeof api.createUser>[0]) => Promise<User>;
+  updateStage: (
+    order: Order,
+    stage: StageKey,
+    data: Parameters<typeof api.updateStage>[2],
+  ) => Promise<Order>;
 }
 
-const AppContext = createContext<AppContextValue | null>(null)
-const notify = (message: string, kind: 'success' | 'error' = 'success') => window.dispatchEvent(new CustomEvent('pb-toast', { detail: { message, kind } }))
-
-function loadInitial(): AppData {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) return JSON.parse(stored) as AppData
-  } catch {
-    localStorage.removeItem(STORAGE_KEY)
-  }
-  return { orders: structuredClone(demoOrders), currentUser: null }
-}
+const AppContext = createContext<AppContextValue | null>(null);
+// eslint-disable-next-line react-refresh/only-export-components
+export const toast = (message: string, kind: "success" | "error" = "success") =>
+  window.dispatchEvent(
+    new CustomEvent("pb-toast", { detail: { message, kind } }),
+  );
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<AppData>(loadInitial)
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [serviceError, setServiceError] = useState<string | null>(null);
 
-  const save = (next: AppData) => {
-    setData(next)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  }
+  const loadData = async (user: User) => {
+    const canViewCustomers = [
+      "admin",
+      "order_manager",
+      "accountant",
+      "dispatch_manager",
+    ].includes(user.role);
+    const [orderData, customerData, userData] = await Promise.all([
+      api.orders(),
+      canViewCustomers ? api.customers() : Promise.resolve([]),
+      user.role === "admin" ? api.users() : Promise.resolve([]),
+    ]);
+    setOrders(orderData);
+    setCustomers(customerData);
+    setUsers(userData);
+  };
+  const reload = async () => {
+    setLoading(true);
+    setServiceError(null);
+    try {
+      const user = await api.me();
+      setCurrentUser(user);
+      await loadData(user);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401)
+        setCurrentUser(null);
+      else
+        setServiceError(
+          error instanceof Error
+            ? error.message
+            : "The service is unavailable.",
+        );
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void reload();
+  }, []);
 
-  const value = useMemo<AppContextValue>(() => ({
-    ...data,
-    users: demoUsers,
-    async login(email, password) {
-      if (apiEnabled) {
+  const value = useMemo<AppContextValue>(
+    () => ({
+      currentUser,
+      orders,
+      customers,
+      users,
+      loading,
+      serviceError,
+      async login(email, password) {
         try {
-          const result = await apiLogin(email, password)
-          save({ orders: result.orders, currentUser: result.user })
-          return null
+          const user = await api.login(email, password);
+          setCurrentUser(user);
+          await loadData(user);
+          return null;
         } catch (error) {
-          return error instanceof Error ? error.message : 'Unable to connect to the server. Please try again.'
+          return error instanceof Error ? error.message : "Sign in failed.";
         }
-      }
-      const user = demoUsers.find((item) => item.email.toLowerCase() === email.trim().toLowerCase() && item.password === password)
-      if (!user) return 'Email or password is incorrect. Please use one of the demo accounts shown below.'
-      save({ ...data, currentUser: user })
-      return null
-    },
-    logout() { clearApiSession(); save({ ...data, currentUser: null }) },
-    resetDemo() { save({ orders: structuredClone(demoOrders), currentUser: data.currentUser }) },
-    updateStage(orderId, stageKey, action, quantity) {
-      if (apiEnabled) {
-        const order = data.orders.find((item) => item.id === orderId)
-        if (order) void apiUpdateStage(order, stageKey, action, quantity).then((updated) => {
-          save({ ...data, orders: data.orders.map((item) => item.id === updated.id ? updated : item) })
-          notify('Order updated successfully. The next team can now see the latest status.')
-        }).catch((error: unknown) => notify(error instanceof Error ? error.message : 'The order could not be updated. Please try again.', 'error'))
-        return
-      }
-      const orders = data.orders.map((source): Order => {
-        if (source.id !== orderId) return source
-        const order = structuredClone(source)
-        const stage = order.stages[stageKey]
-        const now = new Date().toISOString()
-        let message = ''
-        if (action === 'start') {
-          stage.status = 'in_progress'
-          stage.startedAt = now
-          stage.progress = stage.progress ?? 0
-          message = `Started ${stageKey}.`
+      },
+      async logout() {
+        try {
+          await api.logout();
+        } finally {
+          setCurrentUser(null);
+          setOrders([]);
+          setCustomers([]);
+          setUsers([]);
         }
-        if (action === 'progress' && quantity !== undefined) {
-          const safeQuantity = Math.max(0, Math.min(order.quantity, quantity))
-          stage.status = 'in_progress'
-          stage.completedQuantity = safeQuantity
-          stage.progress = Math.round((safeQuantity / order.quantity) * 100)
-          message = `Updated ${stageKey}: ${safeQuantity} of ${order.quantity} completed.`
+      },
+      reload,
+      async createCustomer(data) {
+        const item = await api.createCustomer(data);
+        setCustomers((items) =>
+          [...items, item].sort((a, b) =>
+            a.companyName.localeCompare(b.companyName),
+          ),
+        );
+        toast("Customer saved successfully.");
+        return item;
+      },
+      async createOrder(data) {
+        const item = await api.createOrder(data);
+        setOrders((items) => [item, ...items]);
+        toast(
+          `${item.orderNumber} created. Material and Design teams can begin.`,
+        );
+        return item;
+      },
+      async createUser(data) {
+        const item = await api.createUser(data);
+        setUsers((items) =>
+          [...items, item].sort((a, b) => a.name.localeCompare(b.name)),
+        );
+        toast("Staff account created.");
+        return item;
+      },
+      async updateStage(order, stage, data) {
+        try {
+          const updated = await api.updateStage(order, stage, data);
+          setOrders((items) =>
+            items.map((item) => (item.id === updated.id ? updated : item)),
+          );
+          toast(
+            "Order updated. The responsible teams can see the latest status.",
+          );
+          return updated;
+        } catch (error) {
+          toast(
+            error instanceof Error ? error.message : "Update failed.",
+            "error",
+          );
+          throw error;
         }
-        if (action === 'resolve') {
-          stage.status = 'ready'
-          stage.note = 'Issue resolved. Work can continue.'
-          message = `Resolved the ${stageKey} issue.`
-        }
-        if (action === 'complete') {
-          stage.status = 'completed'
-          stage.completedAt = now
-          stage.progress = 100
-          stage.completedQuantity = order.quantity
-          message = `Marked ${stageKey} completed.`
-        }
-        order.activity.unshift({ id: crypto.randomUUID(), at: now, actor: data.currentUser?.name ?? 'Demo user', message, stage: stageKey })
-        return deriveOrder(order)
-      })
-      save({ ...data, orders })
-      notify('Order updated successfully. The next team can now see the latest status.')
-    },
-  }), [data])
-
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>
+      },
+    }),
+    [currentUser, orders, customers, users, loading, serviceError],
+  );
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useApp() {
-  const context = useContext(AppContext)
-  if (!context) throw new Error('useApp must be used inside AppProvider')
-  return context
+  const value = useContext(AppContext);
+  if (!value) throw new Error("useApp must be inside AppProvider");
+  return value;
 }

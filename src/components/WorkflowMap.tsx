@@ -8,7 +8,7 @@ function Node({ order, stageKey, onSelect }: { order: Order; stageKey: StageKey;
   return <button className="group min-h-28 w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-sky-400 hover:shadow-md" onClick={() => onSelect(stageKey)} aria-label={`Open ${stageInfo[stageKey].label}: ${state.status}`}>
     <div className="flex items-start justify-between gap-2"><span className="text-sm font-bold text-navy-900">{stageInfo[stageKey].short}</span><span className="text-xs font-bold text-slate-400">View</span></div>
     <div className="mt-2"><StatusBadge status={state.status} /></div>
-    <p className="mt-2 truncate text-xs text-slate-500">{state.owner}</p>
+    <p className="mt-2 truncate text-xs text-slate-500">{stageInfo[stageKey].label}</p>
     {typeof state.progress === 'number' && state.status === 'in_progress' && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-500" style={{ width: `${state.progress}%` }} /></div>}
   </button>
 }

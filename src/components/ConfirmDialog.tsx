@@ -25,7 +25,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel = 'Yes, conti
         <div className="min-w-0 flex-1"><h2 id="confirm-title" className="text-lg font-bold text-navy-900">{title}</h2><p id="confirm-message" className="mt-1 text-sm leading-6 text-slate-600">{message}</p></div>
         <button className="grid size-11 place-items-center rounded-xl text-slate-500 hover:bg-slate-100" onClick={onCancel} aria-label="Close confirmation"><X className="size-5" /></button>
       </div>
-      <div className="mt-5 grid grid-cols-2 gap-3"><button className="secondary-button" onClick={onCancel}>No, go back</button><button className="primary-button" onClick={onConfirm} autoFocus>{confirmLabel}</button></div>
+      <div className="mt-5 grid grid-cols-2 gap-3"><button className="secondary-button" onClick={onCancel} autoFocus>Cancel</button><button className="primary-button" onClick={onConfirm}>{confirmLabel}</button></div>
       <p className="mt-3 text-center text-xs text-slate-500">Nothing will change until you confirm.</p>
     </section>
   </div>

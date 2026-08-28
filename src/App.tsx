@@ -1,165 +1,2616 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
-  AlertTriangle, ArrowLeft, Bell, Boxes, CheckCircle2, ChevronRight, ClipboardList,
-  Factory, HelpCircle, LayoutDashboard, LogOut, Menu, PackageCheck,
-  RotateCcw, Search, Settings, ShieldCheck, Users, X,
-} from 'lucide-react'
-import { ConfirmDialog } from './components/ConfirmDialog'
-import { StatusBadge } from './components/StatusBadge'
-import { WorkflowMap } from './components/WorkflowMap'
-import { ToastHost } from './components/ToastHost'
-import { canManageStage, nextInstruction, productionStages, stageInfo, statusLabel } from './lib/workflow'
-import { useApp } from './state/AppContext'
-import type { Order, Role, StageKey } from './types'
+  Link,
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Bell,
+  Building2,
+  CheckCircle2,
+  ChevronRight,
+  Clipboard,
+  ClipboardList,
+  Eye,
+  Factory,
+  HelpCircle,
+  ImagePlus,
+  LayoutDashboard,
+  LoaderCircle,
+  LockKeyhole,
+  LogOut,
+  Menu,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Upload,
+  Users,
+  X,
+} from "lucide-react";
+import { ConfirmDialog } from "./components/ConfirmDialog";
+import { StatusBadge } from "./components/StatusBadge";
+import { ToastHost } from "./components/ToastHost";
+import { WorkflowMap } from "./components/WorkflowMap";
+import { api } from "./lib/api";
+import {
+  canManageStage,
+  nextInstruction,
+  productionStages,
+  stageInfo,
+} from "./lib/workflow";
+import { toast, useApp } from "./state/AppContext";
+import type {
+  Customer,
+  DesignAsset,
+  Order,
+  Role,
+  StageKey,
+  User,
+} from "./types";
 
 const roleLabels: Record<Role, string> = {
-  admin: 'Administrator', order_manager: 'Order / CRM Manager', inventory_manager: 'Material Manager',
-  designer: 'Designer', cutting_manager: 'Cutting Manager', plate_operator: 'Plate Operator',
-  printing_operator: 'Printing Operator', stitching_manager: 'Stitching Manager', packing_manager: 'Packing & D.C. Manager',
-  accountant: 'Accountant', dispatch_manager: 'Dispatch & Delivery Manager',
-}
+  admin: "Super Admin",
+  order_manager: "Order / CRM Manager",
+  inventory_manager: "Material Manager",
+  designer: "Designer",
+  cutting_manager: "Cutting Manager",
+  plate_operator: "Plate Operator",
+  printing_operator: "Printing Operator",
+  stitching_manager: "Stitching Manager",
+  packing_manager: "Packing & D.C. Manager",
+  accountant: "Accountant",
+  dispatch_manager: "Dispatch & Delivery Manager",
+};
+const departmentFor: Record<Role, string> = {
+  admin: "Administration",
+  order_manager: "Order & CRM",
+  inventory_manager: "Material & Inventory",
+  designer: "Design",
+  cutting_manager: "Cutting",
+  plate_operator: "Plate / Prepress",
+  printing_operator: "Printing",
+  stitching_manager: "Stitching",
+  packing_manager: "Packing & D.C.",
+  accountant: "Accounts",
+  dispatch_manager: "Dispatch & Delivery",
+};
+const canViewPrices = (role?: Role) =>
+  !!role && ["admin", "order_manager", "accountant"].includes(role);
+const money = (amount: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+const date = (value?: string) =>
+  value
+    ? new Intl.DateTimeFormat("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(new Date(value))
+    : "Not recorded";
+const dateTime = (value?: string) =>
+  value
+    ? new Intl.DateTimeFormat("en-IN", {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(value))
+    : "Not recorded";
 
-const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount)
-const formatDate = (date?: string) => date ? new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(date)) : 'Not recorded'
-const formatDateTime = (date?: string) => date ? new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(date)) : 'Not recorded'
+function LoadingScreen() {
+  return (
+    <main className="grid min-h-screen place-items-center bg-slate-50 p-6">
+      <div className="text-center">
+        <LoaderCircle className="mx-auto size-10 animate-spin text-brand" />
+        <p className="mt-3 font-semibold text-navy-900">
+          Opening your workspace…
+        </p>
+        <p className="mt-1 text-sm text-slate-500">
+          Checking your secure session and latest orders.
+        </p>
+      </div>
+    </main>
+  );
+}
+function ServiceScreen({
+  message,
+  retry,
+}: {
+  message: string;
+  retry: () => void;
+}) {
+  return (
+    <main className="grid min-h-screen place-items-center bg-slate-50 p-4">
+      <section className="surface max-w-md p-6 text-center">
+        <span className="mx-auto grid size-14 place-items-center rounded-full bg-amber-100 text-amber-700">
+          <AlertTriangle />
+        </span>
+        <h1 className="mt-4 text-xl font-bold text-navy-900">
+          Service temporarily unavailable
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
+        <button className="primary-button mt-5 w-full" onClick={retry}>
+          <RefreshCw className="size-4" />
+          Try again
+        </button>
+        <p className="mt-3 text-xs text-slate-500">
+          Your typed information is kept on this page until you retry.
+        </p>
+      </section>
+    </main>
+  );
+}
 
 function LoginPage() {
-  const { login, users } = useApp()
-  const [email, setEmail] = useState('admin@demo.com')
-  const [password, setPassword] = useState('admin123')
-  const [error, setError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const submit = async (event: FormEvent) => { event.preventDefault(); setSubmitting(true); setError(await login(email, password) ?? ''); setSubmitting(false) }
-  return <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,#d9efff,transparent_38%),linear-gradient(145deg,#f8fafc,#eef3f9)] p-4 sm:p-7">
-    <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_.95fr]">
-      <section className="hidden p-6 lg:block"><div className="inline-flex items-center gap-3"><span className="grid size-14 place-items-center rounded-2xl bg-brand text-xl font-black text-white">PB</span><div><p className="text-xl font-extrabold text-navy-900">Prabodhan Bag</p><p className="text-sm text-slate-500">Production Operations</p></div></div><h1 className="mt-12 max-w-xl text-5xl font-extrabold leading-[1.08] tracking-tight text-navy-900">Every order. Every department. One clear story.</h1><p className="mt-5 max-w-xl text-lg leading-8 text-slate-600">A simple workspace that tells each team member what needs attention now—and lets administrators understand the complete order without visiting ten screens.</p><div className="mt-8 grid max-w-xl grid-cols-3 gap-3"><Feature icon={<ClipboardList />} label="Clear work queue" /><Feature icon={<ShieldCheck />} label="Safe confirmations" /><Feature icon={<Factory />} label="Live workflow" /></div></section>
-      <section className="surface mx-auto min-w-0 w-full max-w-lg overflow-hidden"><div className="bg-navy-900 p-5 text-white sm:p-7"><div className="flex items-center gap-3 lg:hidden"><span className="grid size-12 place-items-center rounded-xl bg-brand text-lg font-black">PB</span><div><p className="font-extrabold">Prabodhan Bag</p><p className="text-xs text-slate-300">Production Operations</p></div></div><p className="eyebrow mt-6 !text-orange-300 lg:mt-0">Secure workspace</p><h1 className="mt-2 text-2xl font-bold">Welcome back</h1><p className="mt-1 text-sm text-slate-300">Choose your role and sign in to see today’s work.</p></div>
-        <form className="p-5 sm:p-7" onSubmit={submit} noValidate>
-          <label className="label" htmlFor="demo-role">Demo role</label><select id="demo-role" className="field" value={email} onChange={(event) => { setEmail(event.target.value); setPassword('admin123'); setError('') }}>{users.map((user) => <option value={user.email} key={user.id}>{roleLabels[user.role]} — {user.name}</option>)}</select>
-          <label className="label mt-4" htmlFor="email">Email</label><input id="email" className="field" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
-          <label className="label mt-4" htmlFor="password">Password</label><input id="password" className="field" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-          {error && <p className="mt-4 flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700" role="alert"><AlertTriangle className="mt-0.5 size-4 shrink-0" />{error}</p>}
-          <button className="primary-button mt-6 w-full" type="submit" disabled={submitting}>{submitting ? 'Signing in…' : 'Sign in to workspace'} <ChevronRight className="size-5" /></button>
-          <p className="mt-4 rounded-xl bg-sky-50 p-3 text-center text-sm text-sky-800"><strong>Demo password:</strong> admin123</p>
-        </form>
-      </section>
+  const { login } = useApp();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError((await login(email, password)) ?? "");
+    setBusy(false);
+  };
+  return (
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,#d9efff,transparent_38%),linear-gradient(145deg,#f8fafc,#eef3f9)] p-4 sm:p-7">
+      <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_.95fr]">
+        <section className="hidden p-6 lg:block">
+          <Brand />
+          <h1 className="mt-12 max-w-xl text-5xl font-extrabold leading-[1.08] tracking-tight text-navy-900">
+            Every order. Every department. One clear story.
+          </h1>
+          <p className="mt-5 max-w-xl text-lg leading-8 text-slate-600">
+            Simple production guidance for factory teams, with complete control
+            and visibility for management.
+          </p>
+          <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
+            <Feature icon={<ClipboardList />} text="Focused work queue" />
+            <Feature icon={<ShieldCheck />} text="Safe confirmations" />
+            <Feature icon={<Factory />} text="Connected workflow" />
+          </div>
+        </section>
+        <section className="surface mx-auto min-w-0 w-full max-w-lg overflow-hidden">
+          <div className="bg-navy-900 p-6 text-white">
+            <div className="lg:hidden">
+              <Brand light />
+            </div>
+            <p className="eyebrow mt-6 !text-orange-300 lg:mt-0">
+              Secure workspace
+            </p>
+            <h1 className="mt-2 text-2xl font-bold">Sign in</h1>
+            <p className="mt-1 text-sm text-slate-300">
+              Use the account created by your Super Admin.
+            </p>
+          </div>
+          <form className="p-6" onSubmit={submit}>
+            <label className="label" htmlFor="email">
+              Work email
+            </label>
+            <input
+              className="field"
+              id="email"
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+            <label className="label mt-4" htmlFor="password">
+              Password
+            </label>
+            <input
+              className="field"
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+            {error && (
+              <p
+                className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
+                role="alert"
+              >
+                {error}
+              </p>
+            )}
+            <button className="primary-button mt-6 w-full" disabled={busy}>
+              {busy ? "Signing in…" : "Sign in to workspace"}
+              <ChevronRight className="size-5" />
+            </button>
+            <p className="mt-4 text-center text-xs text-slate-500">
+              Need access? Contact your Super Admin.
+            </p>
+          </form>
+        </section>
+      </div>
+    </main>
+  );
+}
+function Brand({ light = false }: { light?: boolean }) {
+  return (
+    <div className="inline-flex items-center gap-3">
+      <span className="grid size-12 place-items-center rounded-xl bg-brand font-black text-white">
+        PB
+      </span>
+      <span>
+        <strong className={`block ${light ? "text-white" : "text-navy-900"}`}>
+          Prabodhan Bag
+        </strong>
+        <small className={light ? "text-slate-300" : "text-slate-500"}>
+          Production Operations
+        </small>
+      </span>
     </div>
-  </main>
+  );
+}
+function Feature({ icon, text }: { icon: ReactNode; text: string }) {
+  return (
+    <div className="rounded-xl border border-white bg-white/75 p-3 text-sm font-semibold text-navy-800 shadow-sm">
+      {icon}
+      <span className="mt-2 block">{text}</span>
+    </div>
+  );
 }
 
-function Feature({ icon, label }: { icon: ReactNode; label: string }) { return <div className="rounded-xl border border-white bg-white/70 p-3 text-sm font-semibold text-navy-800 shadow-sm">{icon}<span className="mt-2 block">{label}</span></div> }
+function PasswordChangePage() {
+  const { logout } = useApp();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (next !== confirm) return setError("New passwords do not match.");
+    setBusy(true);
+    try {
+      await api.changePassword(current, next);
+      toast("Password changed. Sign in with your new password.");
+      await logout();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Password change failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <main className="grid min-h-screen place-items-center bg-slate-50 p-4">
+      <form className="surface w-full max-w-md p-6" onSubmit={submit}>
+        <span className="grid size-12 place-items-center rounded-xl bg-sky-50 text-sky-700">
+          <LockKeyhole />
+        </span>
+        <h1 className="mt-4 text-2xl font-bold text-navy-900">
+          Create your private password
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Your temporary password must be changed before opening production
+          data.
+        </p>
+        <label className="label mt-5">Temporary password</label>
+        <input
+          className="field"
+          type="password"
+          value={current}
+          onChange={(event) => setCurrent(event.target.value)}
+          required
+        />
+        <label className="label mt-4">New password</label>
+        <input
+          className="field"
+          type="password"
+          minLength={10}
+          value={next}
+          onChange={(event) => setNext(event.target.value)}
+          required
+        />
+        <label className="label mt-4">Confirm new password</label>
+        <input
+          className="field"
+          type="password"
+          minLength={10}
+          value={confirm}
+          onChange={(event) => setConfirm(event.target.value)}
+          required
+        />
+        {error && (
+          <p className="mt-4 text-sm font-semibold text-red-700">{error}</p>
+        )}
+        <button className="primary-button mt-6 w-full" disabled={busy}>
+          {busy ? "Saving…" : "Change password and continue"}
+        </button>
+      </form>
+    </main>
+  );
+}
 
 const nav = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard }, { to: '/orders', label: 'Orders', icon: ClipboardList },
-  { to: '/queue', label: 'My Work', icon: Factory }, { to: '/team', label: 'Team & Roles', icon: Users },
-  { to: '/more', label: 'More', icon: Menu },
-]
-
+  { to: "/", label: "Dashboard", mr: "मुख्यपृष्ठ", icon: LayoutDashboard },
+  { to: "/orders", label: "Orders", mr: "ऑर्डर", icon: ClipboardList },
+  { to: "/customers", label: "Customers", mr: "ग्राहक", icon: Building2 },
+  { to: "/queue", label: "My Work", mr: "माझे काम", icon: Factory },
+  { to: "/team", label: "Team", mr: "टीम", icon: Users },
+  { to: "/more", label: "More", mr: "अधिक", icon: Menu },
+];
 function Shell({ children }: { children: ReactNode }) {
-  const { currentUser, orders } = useApp()
-  const [mobileMenu, setMobileMenu] = useState(false)
-  if (!currentUser) return null
-  const issues = orders.filter((order) => Object.values(order.stages).some((stage) => ['blocked', 'issue'].includes(stage.status))).length
-  return <div className="min-h-screen bg-[#f4f7fb] pb-20 md:pb-0">
-    <ToastHost />
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-navy-900 p-4 text-white md:flex">
-      <Link to="/" className="flex min-h-14 items-center gap-3 rounded-xl px-2"><span className="grid size-11 place-items-center rounded-xl bg-brand font-black">PB</span><span><strong className="block">Prabodhan Bag</strong><small className="text-slate-400">Production Operations</small></span></Link>
-      <nav className="mt-8 space-y-1" aria-label="Main navigation">{nav.slice(0, 4).map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => `flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition ${isActive ? 'bg-white text-navy-900' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}><Icon className="size-5" />{label}</NavLink>)}</nav>
-      <div className="mt-auto rounded-xl bg-white/8 p-3"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-full bg-sky-500 font-bold">{currentUser.initials}</span><div className="min-w-0"><p className="truncate text-sm font-bold">{currentUser.name}</p><p className="truncate text-xs text-slate-400">{roleLabels[currentUser.role]}</p></div></div><Link to="/more" className="mt-3 flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-slate-300 hover:bg-white/10"><Settings className="size-4" />Settings & help</Link></div>
-    </aside>
-    <div className="md:pl-64"><header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:px-7"><button className="grid size-11 place-items-center rounded-xl border border-slate-200 md:hidden" onClick={() => setMobileMenu(true)} aria-label="Open menu"><Menu className="size-5" /></button><div className="hidden md:block"><p className="text-xs font-semibold text-slate-500">{currentUser.department}</p><p className="font-bold text-navy-900">Good day, {currentUser.name.split(' ')[0]}</p></div><div className="ml-auto flex items-center gap-2"><Link to="/orders?filter=issues" className="relative grid size-11 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label={`${issues} urgent alerts`}><Bell className="size-5" />{issues > 0 && <span className="absolute right-1.5 top-1.5 size-2.5 rounded-full border-2 border-white bg-red-500" />}</Link><span className="hidden rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 sm:inline">{roleLabels[currentUser.role]}</span></div></header><main id="main-content" className="mx-auto max-w-[1440px] p-4 md:p-7">{children}</main></div>
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_20px_rgba(15,23,42,.08)] md:hidden" aria-label="Mobile navigation">{nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => `flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-[11px] font-bold ${isActive ? 'text-brand' : 'text-slate-500'}`}><Icon className="size-5" />{label}</NavLink>)}</nav>
-    {mobileMenu && <div className="fixed inset-0 z-50 bg-navy-950/50 md:hidden" onClick={() => setMobileMenu(false)}><div className="h-full w-[86%] max-w-xs bg-white p-4" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between"><strong className="text-navy-900">Navigation</strong><button className="grid size-11 place-items-center rounded-xl" onClick={() => setMobileMenu(false)} aria-label="Close menu"><X /></button></div><nav className="mt-4 space-y-2">{nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setMobileMenu(false)} className="flex min-h-12 items-center gap-3 rounded-xl bg-slate-50 px-3 font-semibold text-slate-700"><Icon className="size-5" />{label}</NavLink>)}</nav></div></div>}
-  </div>
+  const { currentUser, orders } = useApp();
+  const [drawer, setDrawer] = useState(false);
+  const [lang, setLang] = useState<"en" | "mr">(() =>
+    localStorage.getItem("pb-language") === "mr" ? "mr" : "en",
+  );
+  if (!currentUser) return null;
+  const canViewCustomers = [
+    "admin",
+    "order_manager",
+    "accountant",
+    "dispatch_manager",
+  ].includes(currentUser.role);
+  const visibleNav = nav.filter(
+    (item) =>
+      (item.to !== "/team" || currentUser.role === "admin") &&
+      (item.to !== "/customers" || canViewCustomers),
+  );
+  const issues = orders.filter((order) =>
+    Object.values(order.stages).some((state) =>
+      ["blocked", "issue"].includes(state.status),
+    ),
+  ).length;
+  const toggleLanguage = () => {
+    const next = lang === "en" ? "mr" : "en";
+    setLang(next);
+    localStorage.setItem("pb-language", next);
+  };
+  return (
+    <div className="min-h-screen bg-[#f4f7fb] pb-20 md:pb-0">
+      <ToastHost />
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-navy-900 p-4 text-white md:flex">
+        <Link to="/" className="min-h-14">
+          <Brand light />
+        </Link>
+        <nav className="mt-8 space-y-1">
+          {visibleNav
+            .filter((item) => item.to !== "/more")
+            .map(({ to, label, mr, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === "/"}
+                className={({ isActive }) =>
+                  `flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${isActive ? "bg-white text-navy-900" : "text-slate-300 hover:bg-white/10 hover:text-white"}`
+                }
+              >
+                <Icon className="size-5" />
+                {lang === "mr" ? mr : label}
+              </NavLink>
+            ))}
+        </nav>
+        <div className="mt-auto rounded-xl bg-white/10 p-3">
+          <div className="flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-full bg-sky-500 font-bold">
+              {currentUser.initials}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold">{currentUser.name}</p>
+              <p className="truncate text-xs text-slate-400">
+                {roleLabels[currentUser.role]}
+              </p>
+            </div>
+          </div>
+          <button
+            className="mt-3 min-h-11 w-full rounded-lg text-left text-sm font-semibold text-slate-300 hover:bg-white/10"
+            onClick={toggleLanguage}
+          >
+            {lang === "en" ? "मराठीमध्ये पहा" : "View in English"}
+          </button>
+        </div>
+      </aside>
+      <div className="md:pl-64">
+        <header className="sticky top-0 z-20 flex min-h-16 items-center border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:px-7">
+          <button
+            className="grid size-11 place-items-center rounded-xl border border-slate-200 md:hidden"
+            onClick={() => setDrawer(true)}
+            aria-label="Open menu"
+          >
+            <Menu />
+          </button>
+          <div className="hidden md:block">
+            <p className="text-xs font-semibold text-slate-500">
+              {currentUser.department}
+            </p>
+            <p className="font-bold text-navy-900">
+              {lang === "mr"
+                ? `नमस्कार, ${currentUser.name.split(" ")[0]}`
+                : `Good day, ${currentUser.name.split(" ")[0]}`}
+            </p>
+          </div>
+          <Link
+            to="/orders"
+            className="relative ml-auto grid size-11 place-items-center rounded-xl border border-slate-200"
+            aria-label={`${issues} alerts`}
+          >
+            <Bell className="size-5" />
+            {issues > 0 && (
+              <span className="absolute right-1 top-1 size-2.5 rounded-full bg-red-500" />
+            )}
+          </Link>
+        </header>
+        <main className="mx-auto max-w-[1440px] p-4 md:p-7" id="main-content">
+          {children}
+        </main>
+      </div>
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_20px_rgba(15,23,42,.08)] md:hidden">
+        {visibleNav.slice(0, 4).map(({ to, label, mr, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === "/"}
+            className={({ isActive }) =>
+              `flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-bold ${isActive ? "text-brand" : "text-slate-500"}`
+            }
+          >
+            <Icon className="size-5" />
+            {lang === "mr" ? mr : label}
+          </NavLink>
+        ))}
+        <NavLink
+          to="/more"
+          className={({ isActive }) =>
+            `flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-bold ${isActive ? "text-brand" : "text-slate-500"}`
+          }
+        >
+          <Menu className="size-5" />
+          {lang === "mr" ? "अधिक" : "More"}
+        </NavLink>
+      </nav>
+      {drawer && (
+        <div
+          className="fixed inset-0 z-50 bg-navy-950/50 md:hidden"
+          onClick={() => setDrawer(false)}
+        >
+          <aside
+            className="h-full w-[86%] max-w-xs bg-white p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <Brand />
+              <button
+                className="grid size-11 place-items-center"
+                onClick={() => setDrawer(false)}
+              >
+                <X />
+              </button>
+            </div>
+            <nav className="mt-6 space-y-2">
+              {visibleNav.map(({ to, label, mr, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onClick={() => setDrawer(false)}
+                  className="flex min-h-12 items-center gap-3 rounded-xl bg-slate-50 px-3 font-semibold"
+                >
+                  <Icon className="size-5" />
+                  {lang === "mr" ? mr : label}
+                </NavLink>
+              ))}
+            </nav>
+            <button
+              className="secondary-button mt-6 w-full"
+              onClick={toggleLanguage}
+            >
+              {lang === "en" ? "मराठी" : "English"}
+            </button>
+          </aside>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) { return <header className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">{eyebrow}</p><h1 className="page-title mt-1">{title}</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{description}</p></div>{action}</header> }
+function Heading({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p className="eyebrow">{eyebrow}</p>
+        <h1 className="page-title mt-1">{title}</h1>
+        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+          {description}
+        </p>
+      </div>
+      {action}
+    </header>
+  );
+}
+function Empty({
+  title,
+  text,
+  action,
+}: {
+  title: string;
+  text: string;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="surface col-span-full p-8 text-center">
+      <span className="mx-auto grid size-12 place-items-center rounded-full bg-sky-50 text-sky-700">
+        <ClipboardList />
+      </span>
+      <h2 className="mt-3 font-bold text-navy-900">{title}</h2>
+      <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-slate-500">
+        {text}
+      </p>
+      {action && <div className="mt-5">{action}</div>}
+    </section>
+  );
+}
 
 function DashboardPage() {
-  const { currentUser, orders } = useApp()
-  if (!currentUser) return null
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'order_manager'
-  const relevantStage = Object.entries(stageInfo).find(([, info]) => info.role === currentUser.role)?.[0] as StageKey | undefined
-  const queue = isAdmin ? orders : orders.filter((order) => relevantStage && ['ready', 'in_progress', 'blocked', 'issue'].includes(order.stages[relevantStage].status))
-  const active = orders.filter((order) => order.stages.delivery.status !== 'completed').length
-  const issues = orders.filter((order) => Object.values(order.stages).some((state) => ['blocked', 'issue'].includes(state.status))).length
-  const dueSoon = orders.filter((order) => order.expectedDelivery <= '2026-08-29' && order.stages.delivery.status !== 'completed').length
-  return <><PageHeading eyebrow="Today’s overview" title={isAdmin ? 'Production at a glance' : `${currentUser.department} workspace`} description={isAdmin ? 'See urgent work first, then open any order to understand its complete journey.' : `Only the orders that need attention from ${currentUser.department} are shown here.`} action={<Link to="/orders" className="primary-button">View all orders <ChevronRight className="size-4" /></Link>} />
-    <section className="grid grid-cols-2 gap-3 lg:grid-cols-4"><Kpi label="Total orders" value={orders.length} helper="All customer orders" icon={<ClipboardList />} /><Kpi label="Active now" value={active} helper="Still in process" icon={<Factory />} /><Kpi label="Need attention" value={issues} helper="Blocked or issue" icon={<AlertTriangle />} danger={issues > 0} /><Kpi label="Due soon" value={dueSoon} helper="By 29 Aug" icon={<PackageCheck />} /></section>
-    {isAdmin && <section className="surface mt-5 p-4 md:p-5"><div className="flex items-center justify-between"><div><h2 className="text-lg font-bold text-navy-900">Where orders are now</h2><p className="text-sm text-slate-500">Tap a stage to view matching orders.</p></div><Boxes className="size-6 text-slate-400" /></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">{productionStages.slice(0, 12).map((stage) => { const count = orders.filter((order) => order.currentStage === stage).length; return <Link to={`/orders?stage=${stage}`} key={stage} className="rounded-xl border border-slate-200 p-3 transition hover:border-sky-400 hover:bg-sky-50"><span className="text-2xl font-extrabold text-navy-900">{count}</span><span className="mt-1 block text-xs font-semibold text-slate-600">{stageInfo[stage].short}</span></Link> })}</div></section>}
-    <section className="mt-5"><div className="mb-3 flex items-end justify-between"><div><h2 className="text-lg font-bold text-navy-900">{isAdmin ? 'Priority orders' : 'My work queue'}</h2><p className="text-sm text-slate-500">Open an order for the next clear action.</p></div><Link to="/queue" className="text-sm font-bold text-brand">See queue</Link></div><div className="grid gap-3 xl:grid-cols-2">{queue.slice(0, 4).map((order) => <OrderCard order={order} key={order.id} />)}{queue.length === 0 && <EmptyState />}</div></section>
-  </>
+  const { currentUser, orders } = useApp();
+  if (!currentUser) return null;
+  const relevant = Object.entries(stageInfo).find(
+    ([, info]) => info.role === currentUser.role,
+  )?.[0] as StageKey | undefined;
+  const myQueue =
+    currentUser.role === "admin"
+      ? orders
+      : orders.filter(
+          (order) =>
+            relevant &&
+            ["ready", "in_progress", "blocked", "issue"].includes(
+              order.stages[relevant].status,
+            ),
+        );
+  const issues = orders.filter((order) =>
+    Object.values(order.stages).some((state) =>
+      ["blocked", "issue"].includes(state.status),
+    ),
+  ).length;
+  return (
+    <>
+      <Heading
+        eyebrow="Today’s work"
+        title={
+          currentUser.role === "admin"
+            ? "Production at a glance"
+            : `${currentUser.department} workspace`
+        }
+        description="Urgent work appears first. Open an order to see exactly what happened and what should happen next."
+        action={
+          currentUser.role === "admin" ||
+          currentUser.role === "order_manager" ? (
+            <Link className="primary-button" to="/orders/new">
+              <Plus className="size-4" />
+              Create order
+            </Link>
+          ) : undefined
+        }
+      />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Total orders" value={orders.length} />
+        <Kpi
+          label="Active"
+          value={orders.filter((o) => o.status === "active").length}
+        />
+        <Kpi label="Need attention" value={issues} danger={issues > 0} />
+        <Kpi label="My queue" value={myQueue.length} />
+      </div>
+      <section className="mt-5">
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-navy-900">
+              {currentUser.role === "admin"
+                ? "Recently updated orders"
+                : "Work waiting for me"}
+            </h2>
+            <p className="text-sm text-slate-500">
+              Only real records from Atlas appear here.
+            </p>
+          </div>
+          <Link className="text-sm font-bold text-brand" to="/queue">
+            Open queue
+          </Link>
+        </div>
+        <div className="grid gap-3 xl:grid-cols-2">
+          {myQueue.slice(0, 6).map((order) => (
+            <OrderCard key={order.id} order={order} />
+          ))}
+          {myQueue.length === 0 && (
+            <Empty
+              title={orders.length ? "Your queue is clear" : "No orders yet"}
+              text={
+                orders.length
+                  ? "There is no work waiting for your department."
+                  : "Create the first customer and order to begin practical testing."
+              }
+              action={
+                !orders.length &&
+                (currentUser.role === "admin" ||
+                  currentUser.role === "order_manager") ? (
+                  <Link className="primary-button" to="/customers">
+                    <Plus className="size-4" />
+                    Create first customer
+                  </Link>
+                ) : undefined
+              }
+            />
+          )}
+        </div>
+      </section>
+    </>
+  );
+}
+function Kpi({
+  label,
+  value,
+  danger = false,
+}: {
+  label: string;
+  value: number;
+  danger?: boolean;
+}) {
+  return (
+    <div className="surface p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p
+        className={`mt-2 text-3xl font-extrabold ${danger ? "text-red-600" : "text-navy-900"}`}
+      >
+        {value}
+      </p>
+    </div>
+  );
 }
 
-function Kpi({ label, value, helper, icon, danger = false }: { label: string; value: number; helper: string; icon: ReactNode; danger?: boolean }) { return <div className="surface min-w-0 p-4"><div className="flex items-start justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className={`mt-2 text-3xl font-extrabold ${danger ? 'text-red-600' : 'text-navy-900'}`}>{value}</p></div><span className={`grid size-10 place-items-center rounded-xl ${danger ? 'bg-red-50 text-red-600' : 'bg-sky-50 text-sky-700'}`}>{icon}</span></div><p className="mt-2 truncate text-xs text-slate-500">{helper}</p></div> }
-
-function OrdersPage({ queueOnly = false }: { queueOnly?: boolean }) {
-  const { orders, currentUser } = useApp()
-  const [query, setQuery] = useState('')
-  const [stage, setStage] = useState('all')
-  const relevantStage = currentUser && Object.entries(stageInfo).find(([, info]) => info.role === currentUser.role)?.[0] as StageKey | undefined
-  const source = queueOnly && currentUser?.role !== 'admin' ? orders.filter((order) => relevantStage && ['ready', 'in_progress', 'blocked', 'issue'].includes(order.stages[relevantStage].status)) : orders
-  const filtered = source.filter((order) => `${order.orderNumber} ${order.customer} ${order.product} ${order.phone}`.toLowerCase().includes(query.toLowerCase()) && (stage === 'all' || order.currentStage === stage))
-  return <><PageHeading eyebrow={queueOnly ? 'Focused work' : 'Order register'} title={queueOnly ? 'My work queue' : 'All orders'} description={queueOnly ? 'This list contains only work relevant to your department.' : 'Search by order number, customer, phone, or product. Open any order to see the complete process.'} />
-    <section className="surface mb-4 grid gap-3 p-3 sm:grid-cols-[1fr_220px]"><label className="relative"><span className="sr-only">Search orders</span><Search className="absolute left-3.5 top-3.5 size-5 text-slate-400" /><input className="field pl-11" placeholder="Search order, customer, phone…" value={query} onChange={(event) => setQuery(event.target.value)} /></label><label><span className="sr-only">Filter by current stage</span><select className="field" value={stage} onChange={(event) => setStage(event.target.value)}><option value="all">All production stages</option>{productionStages.map((key) => <option key={key} value={key}>{stageInfo[key].short}</option>)}</select></label></section>
-    <div className="grid gap-3 xl:grid-cols-2">{filtered.map((order) => <OrderCard order={order} key={order.id} />)}{filtered.length === 0 && <EmptyState />}</div>
-  </>
+function OrdersPage({ queue = false }: { queue?: boolean }) {
+  const { orders, currentUser } = useApp();
+  const [search, setSearch] = useState("");
+  const [stage, setStage] = useState("all");
+  const relevant =
+    currentUser &&
+    (Object.entries(stageInfo).find(
+      ([, info]) => info.role === currentUser.role,
+    )?.[0] as StageKey | undefined);
+  const source =
+    queue && currentUser?.role !== "admin"
+      ? orders.filter(
+          (order) =>
+            relevant &&
+            ["ready", "in_progress", "blocked", "issue"].includes(
+              order.stages[relevant].status,
+            ),
+        )
+      : orders;
+  const result = source.filter(
+    (order) =>
+      `${order.orderNumber} ${order.customer} ${order.product} ${order.phone}`
+        .toLowerCase()
+        .includes(search.toLowerCase()) &&
+      (stage === "all" || order.currentStage === stage),
+  );
+  return (
+    <>
+      <Heading
+        eyebrow={queue ? "Focused work" : "Order register"}
+        title={queue ? "My work queue" : "Orders"}
+        description={
+          queue
+            ? "Only work assigned to your department appears here."
+            : "Search real orders and open one to understand its complete production story."
+        }
+        action={
+          !queue &&
+          (currentUser?.role === "admin" ||
+            currentUser?.role === "order_manager") ? (
+            <Link className="primary-button" to="/orders/new">
+              <Plus className="size-4" />
+              New order
+            </Link>
+          ) : undefined
+        }
+      />
+      <section className="surface mb-4 grid gap-3 p-3 sm:grid-cols-[1fr_220px]">
+        <label className="relative">
+          <span className="sr-only">Search</span>
+          <Search className="absolute left-3.5 top-3.5 size-5 text-slate-400" />
+          <input
+            className="field pl-11"
+            placeholder="Order, customer, product or phone…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <select
+          className="field"
+          value={stage}
+          onChange={(event) => setStage(event.target.value)}
+          aria-label="Filter stage"
+        >
+          <option value="all">All stages</option>
+          {productionStages.map((key) => (
+            <option value={key} key={key}>
+              {stageInfo[key].short}
+            </option>
+          ))}
+        </select>
+      </section>
+      <div className="grid gap-3 xl:grid-cols-2">
+        {result.map((order) => (
+          <OrderCard key={order.id} order={order} />
+        ))}
+        {result.length === 0 && (
+          <Empty
+            title="No matching orders"
+            text={
+              orders.length
+                ? "Try changing the search or stage filter."
+                : "No orders exist yet. Create a customer, then create the first order."
+            }
+          />
+        )}
+      </div>
+    </>
+  );
+}
+function OrderCard({ order }: { order: Order }) {
+  const { currentUser } = useApp();
+  const state = order.stages[order.currentStage];
+  return (
+    <Link
+      to={`/orders/${order.id}`}
+      className="surface group block p-4 transition hover:border-sky-300 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-extrabold text-brand">{order.orderNumber}</p>
+          <h2 className="mt-1 truncate text-lg font-bold text-navy-900">
+            {order.customer}
+          </h2>
+          <p className="truncate text-sm text-slate-600">
+            {order.product} · {order.quantity.toLocaleString("en-IN")} bags
+          </p>
+        </div>
+        <ChevronRight className="size-5 shrink-0 text-slate-400" />
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <StatusBadge status={state.status} />
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold">
+          {stageInfo[order.currentStage].short}
+        </span>
+        {order.priority !== "normal" && (
+          <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-bold text-orange-700">
+            {order.priority}
+          </span>
+        )}
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs">
+        <span>
+          <b className="block text-slate-500">Delivery</b>
+          {date(order.expectedDelivery)}
+        </span>
+        {canViewPrices(currentUser?.role) ? (
+          <span>
+            <b className="block text-slate-500">Value</b>
+            {money(order.amount)}
+          </span>
+        ) : (
+          <span>
+            <b className="block text-slate-500">Information</b>
+            Price hidden for your role
+          </span>
+        )}
+      </div>
+    </Link>
+  );
 }
 
-function OrderCard({ order }: { order: Order }) { const state = order.stages[order.currentStage]; return <Link to={`/orders/${order.id}`} className="surface group block p-4 transition hover:border-sky-300 hover:shadow-md"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-extrabold text-brand">{order.orderNumber}</p><h2 className="mt-1 truncate text-lg font-bold text-navy-900">{order.customer}</h2><p className="truncate text-sm text-slate-600">{order.product} · {order.quantity.toLocaleString('en-IN')} bags</p></div><ChevronRight className="mt-1 size-5 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-brand" /></div><div className="mt-4 flex flex-wrap items-center gap-2"><StatusBadge status={state.status} /><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{stageInfo[order.currentStage].short}</span>{order.priority !== 'normal' && <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-bold text-orange-700">{order.priority === 'urgent' ? 'Urgent' : 'High priority'}</span>}</div><div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs"><span><b className="block text-slate-500">Expected delivery</b><span className="font-semibold text-slate-800">{formatDate(order.expectedDelivery)}</span></span><span><b className="block text-slate-500">Order value</b><span className="font-semibold text-slate-800">{formatCurrency(order.amount)}</span></span></div></Link> }
-function EmptyState() { return <div className="surface col-span-full p-8 text-center"><CheckCircle2 className="mx-auto size-10 text-emerald-500" /><h2 className="mt-3 font-bold text-navy-900">No work needs attention</h2><p className="mt-1 text-sm text-slate-500">Try changing the search or filter.</p></div> }
+function CustomersPage() {
+  const { customers, currentUser, createCustomer, reload } = useApp();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Customer | null>(null);
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const permitted =
+    currentUser?.role === "admin" || currentUser?.role === "order_manager";
+  const filtered = customers.filter((c) =>
+    `${c.companyName} ${c.contactPerson} ${c.phone}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const data = {
+        companyName: String(form.get("companyName")),
+        contactPerson: String(form.get("contactPerson")),
+        phone: String(form.get("phone")),
+        email: String(form.get("email")) || undefined,
+        address: String(form.get("address")),
+      };
+      if (editing) {
+        await api.updateCustomer(editing.id, data);
+        await reload();
+        toast("Customer details updated.");
+      } else {
+        await createCustomer(data);
+      }
+      setOpen(false);
+      setEditing(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save customer.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <Heading
+        eyebrow="Customer relationships"
+        title="Customers"
+        description="Store customer contact details once, then use them while creating orders."
+        action={
+          permitted ? (
+            <button
+              className="primary-button"
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus className="size-4" />
+              Add customer
+            </button>
+          ) : undefined
+        }
+      />
+      <label className="relative mb-4 block">
+        <Search className="absolute left-3.5 top-3.5 size-5 text-slate-400" />
+        <input
+          className="field pl-11"
+          placeholder="Search customer or phone…"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </label>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {filtered.map((customer) => (
+          <article className="surface p-4" key={customer.id}>
+            <div className="flex items-start gap-3">
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sky-50 font-bold text-sky-700">
+                {customer.companyName.slice(0, 2).toUpperCase()}
+              </span>
+              <div className="min-w-0">
+                <h2 className="truncate font-bold text-navy-900">
+                  {customer.companyName}
+                </h2>
+                <p className="text-sm text-slate-500">
+                  {customer.contactPerson}
+                </p>
+              </div>
+            </div>
+            <dl className="mt-4 space-y-2 text-sm">
+              <p>
+                <b className="text-slate-500">Phone:</b> {customer.phone}
+              </p>
+              <p className="truncate">
+                <b className="text-slate-500">Email:</b>{" "}
+                {customer.email || "Not provided"}
+              </p>
+              <p className="line-clamp-2">
+                <b className="text-slate-500">Address:</b> {customer.address}
+              </p>
+            </dl>
+            {permitted && (
+              <button
+                className="secondary-button mt-4 w-full"
+                onClick={() => {
+                  setEditing(customer);
+                  setOpen(true);
+                }}
+              >
+                Edit customer details
+              </button>
+            )}
+          </article>
+        ))}
+        {filtered.length === 0 && (
+          <Empty
+            title="No customers yet"
+            text="Add the first real customer before creating an order."
+          />
+        )}
+      </div>
+      {open && (
+        <Modal
+          title={editing ? "Edit customer" : "Add customer"}
+          close={() => {
+            setOpen(false);
+            setEditing(null);
+          }}
+        >
+          <form onSubmit={submit} key={editing?.id ?? "new-customer"}>
+            <Field
+              name="companyName"
+              label="Company name"
+              defaultValue={editing?.companyName}
+              required
+            />
+            <Field
+              name="contactPerson"
+              label="Contact person"
+              defaultValue={editing?.contactPerson}
+              required
+            />
+            <Field
+              name="phone"
+              label="Phone number"
+              defaultValue={editing?.phone}
+              required
+            />
+            <Field
+              name="email"
+              label="Email (optional)"
+              type="email"
+              defaultValue={editing?.email}
+            />
+            <label className="label mt-4">Address</label>
+            <textarea
+              className="field min-h-24 py-3"
+              name="address"
+              defaultValue={editing?.address}
+              required
+            />
+            {error && <ErrorText>{error}</ErrorText>}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setOpen(false);
+                  setEditing(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button className="primary-button" disabled={busy}>
+                {busy ? "Saving…" : editing ? "Save changes" : "Save customer"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function NewOrderPage() {
+  const { customers, createOrder } = useApp();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (!customers.length)
+    return (
+      <>
+        <Heading
+          eyebrow="New order"
+          title="Create an order"
+          description="A customer is required before an order can be booked."
+        />
+        <Empty
+          title="Create a customer first"
+          text="Orders must be connected to a real customer record."
+          action={
+            <Link className="primary-button" to="/customers">
+              Go to customers
+            </Link>
+          }
+        />
+      </>
+    );
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const order = await createOrder({
+        customerId: String(form.get("customerId")),
+        product: String(form.get("product")),
+        quantity: Number(form.get("quantity")),
+        amount: Number(form.get("amount")),
+        expectedDelivery: String(form.get("expectedDelivery")),
+        priority: String(form.get("priority")),
+        notes: String(form.get("notes")) || undefined,
+      });
+      navigate(`/orders/${order.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create order.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        className="mb-4 inline-flex min-h-11 items-center gap-2 font-semibold text-slate-600"
+        onClick={() => navigate(-1)}
+      >
+        <ArrowLeft className="size-5" />
+        Back
+      </button>
+      <Heading
+        eyebrow="Order booking"
+        title="Create a new order"
+        description="Only essential information is required. Material and Design teams are notified after confirmation."
+      />
+      <form className="surface mx-auto max-w-3xl p-5 md:p-7" onSubmit={submit}>
+        <section>
+          <h2 className="text-lg font-bold text-navy-900">1. Customer</h2>
+          <label className="label mt-4">Choose customer</label>
+          <select className="field" name="customerId" required defaultValue="">
+            <option value="" disabled>
+              Select a customer
+            </option>
+            {customers.map((customer) => (
+              <option value={customer.id} key={customer.id}>
+                {customer.companyName} — {customer.contactPerson}
+              </option>
+            ))}
+          </select>
+        </section>
+        <section className="mt-7 border-t border-slate-200 pt-6">
+          <h2 className="text-lg font-bold text-navy-900">
+            2. Bag specification
+          </h2>
+          <Field
+            name="product"
+            label="Bag product / description"
+            placeholder="Example: 25 kg printed woven fertilizer bag"
+            required
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              name="quantity"
+              label="Quantity"
+              type="number"
+              min="1"
+              required
+            />
+            <Field
+              name="amount"
+              label="Order value (₹)"
+              type="number"
+              min="0"
+              required
+            />
+          </div>
+        </section>
+        <section className="mt-7 border-t border-slate-200 pt-6">
+          <h2 className="text-lg font-bold text-navy-900">3. Delivery</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              name="expectedDelivery"
+              label="Expected delivery"
+              type="date"
+              required
+            />
+            <label>
+              <span className="label mt-4">Priority</span>
+              <select className="field" name="priority">
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </label>
+          </div>
+          <label className="label mt-4">Notes (optional)</label>
+          <textarea
+            className="field min-h-24 py-3"
+            name="notes"
+            placeholder="Important customer or production instructions"
+          />
+        </section>
+        {error && <ErrorText>{error}</ErrorText>}
+        <div className="mt-7 rounded-xl bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+          <strong>After creation:</strong> Material and Design become ready in
+          parallel. No image is required at order booking.
+        </div>
+        <button className="primary-button mt-5 w-full" disabled={busy}>
+          {busy ? "Creating order…" : "Confirm and create order"}
+        </button>
+      </form>
+    </>
+  );
+}
 
 function OrderDetailPage() {
-  const { id } = useParams()
-  const { orders, currentUser, updateStage } = useApp()
-  const navigate = useNavigate()
-  const order = orders.find((item) => item.id === id)
-  const [selected, setSelected] = useState<StageKey | null>(null)
-  const [quantity, setQuantity] = useState<number | ''>('')
-  const [pending, setPending] = useState<{ action: 'start' | 'complete' | 'progress' | 'resolve'; title: string; message: string } | null>(null)
-  if (!order || !currentUser) return <Navigate to="/orders" replace />
-  const current = order.stages[order.currentStage]
-  const selectedState = selected ? order.stages[selected] : null
-  const manage = selected ? canManageStage(currentUser.role, selected) : false
-  const ask = (action: 'start' | 'complete' | 'progress' | 'resolve') => {
-    if (!selected) return
-    const label = stageInfo[selected].short
-    const messages = {
-      start: `Start ${label} for ${order.orderNumber}? The order will appear as “In progress” for all departments.`,
-      complete: `Mark ${label} complete for ${order.orderNumber}? This may make the next department’s work ready to start.`,
-      progress: `Save ${quantity || 0} of ${order.quantity} completed for ${label}? Everyone viewing this order will see the new quantity.`,
-      resolve: `Confirm that the ${label} issue is resolved? The responsible team will be able to continue work.`,
+  const { id } = useParams();
+  const { currentUser, orders, updateStage, reload } = useApp();
+  const navigate = useNavigate();
+  const [order, setOrder] = useState<Order | null>(
+    orders.find((item) => item.id === id) ?? null,
+  );
+  const [selected, setSelected] = useState<StageKey | null>(null);
+  const [pending, setPending] = useState<{
+    action: string;
+    title: string;
+    message: string;
+  } | null>(null);
+  const [cancelPending, setCancelPending] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [quantity, setQuantity] = useState<number | "">("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(!order);
+  useEffect(() => {
+    if (!id) return;
+    // Loading fresh server state when the route changes is intentional.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBusy(true);
+    api
+      .order(id)
+      .then(setOrder)
+      .catch((error) => toast(error.message, "error"))
+      .finally(() => setBusy(false));
+  }, [id]);
+  if (busy && !order) return <LoadingScreen />;
+  if (!order || !currentUser) return <Navigate to="/orders" replace />;
+  const state = selected ? order.stages[selected] : null;
+  const manage = selected ? canManageStage(currentUser.role, selected) : false;
+  const consequence = (stage: StageKey, action: string) => {
+    const next: Partial<Record<StageKey, string>> = {
+      material: "Cutting",
+      design: "Plate preparation",
+      cutting: "Printing when Plate is also complete",
+      plate: "Printing when Cutting is also complete",
+      printing: "Stitching",
+      stitching: "Packing",
+      packing: "Delivery Challan",
+      dc: "Billing",
+      billing: "Payment and Dispatch",
+      payment: "Delivery after Dispatch",
+      dispatch: "Delivery after Payment",
+      delivery: "order completion and 30-day image retention",
+      return: "Refund",
+      refund: "case closure",
+    };
+    return action === "complete"
+      ? `Complete ${stageInfo[stage].short}? This will make ${next[stage] ?? "the next work"} ready.`
+      : action === "start"
+        ? `Start ${stageInfo[stage].short}? Everyone will see this step as In progress.`
+        : action === "block"
+          ? `Report this issue? Production will pause at ${stageInfo[stage].short} until it is resolved.`
+          : `Resolve this issue? The responsible team will be able to continue.`;
+  };
+  const ask = (action: string) => {
+    if (!selected) return;
+    if (action === "block" && note.trim().length < 3)
+      return toast("Explain the issue before reporting it.", "error");
+    setPending({
+      action,
+      title: `${action === "complete" ? "Complete" : action === "start" ? "Start" : action === "block" ? "Report issue for" : "Resolve"} ${stageInfo[selected].short}?`,
+      message: consequence(selected, action),
+    });
+  };
+  const execute = async () => {
+    if (!pending || !selected) return;
+    try {
+      const updated = await updateStage(order, selected, {
+        action: pending.action,
+        note: note || undefined,
+        data: stageData(selected),
+      });
+      setOrder(updated);
+      setSelected(null);
+      setPending(null);
+      setNote("");
+    } catch {
+      setPending(null);
     }
-    setPending({ action, title: `${action === 'complete' ? 'Complete' : action === 'resolve' ? 'Resolve' : action === 'progress' ? 'Update' : 'Start'} ${label}?`, message: messages[action] })
-  }
-  return <><button className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 font-semibold text-slate-600 hover:bg-white" onClick={() => navigate(-1)}><ArrowLeft className="size-5" />Back to orders</button>
-    <section className="surface overflow-hidden"><div className="bg-navy-900 p-5 text-white md:p-7"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-bold text-orange-300">{order.orderNumber}</p><h1 className="mt-1 text-2xl font-extrabold md:text-3xl">{order.customer}</h1><p className="mt-2 text-sm text-slate-300">{order.product} · {order.quantity.toLocaleString('en-IN')} bags</p></div><div className="rounded-xl bg-white/10 p-3"><p className="text-xs font-semibold text-slate-300">Current responsibility</p><p className="mt-1 font-bold">{stageInfo[order.currentStage].label}</p><p className="text-sm text-slate-300">{current.owner}</p></div></div><div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/15 pt-5 md:grid-cols-4"><Summary label="Order value" value={formatCurrency(order.amount)} /><Summary label="Expected delivery" value={formatDate(order.expectedDelivery)} /><Summary label="Priority" value={order.priority.toUpperCase()} /><Summary label="Current status" value={statusLabel(current.status)} /></div></div></section>
-    <section className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_.6fr]"><div className="rounded-2xl border border-sky-200 bg-sky-50 p-5"><p className="eyebrow">What should happen next?</p><h2 className="mt-2 text-lg font-bold text-navy-900">{nextInstruction(order)}</h2><p className="mt-2 text-sm leading-6 text-sky-900">Responsible: <strong>{current.owner}</strong>. Open the highlighted workflow step for actions and full details.</p><button className="primary-button mt-4" onClick={() => setSelected(order.currentStage)}>Open next action <ChevronRight className="size-4" /></button></div><div className="surface p-5"><p className="text-sm font-bold text-slate-500">Overall completion</p><p className="mt-1 text-3xl font-extrabold text-navy-900">{Math.round(productionStages.filter((key) => order.stages[key].status === 'completed').length / productionStages.length * 100)}%</p><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${productionStages.filter((key) => order.stages[key].status === 'completed').length / productionStages.length * 100}%` }} /></div><p className="mt-3 text-xs text-slate-500">{productionStages.filter((key) => order.stages[key].status === 'completed').length} of {productionStages.length} main steps complete</p></div></section>
-    <div className="mt-4"><WorkflowMap order={order} onSelect={(stage) => { setSelected(stage); setQuantity(order.stages[stage].completedQuantity ?? '') }} /></div>
-    <section className="mt-4 grid gap-4 lg:grid-cols-[.75fr_1.25fr]"><div className="surface p-5"><h2 className="text-lg font-bold text-navy-900">Customer and order</h2><dl className="mt-4 space-y-3 text-sm"><Detail label="Contact person" value={order.contactPerson} /><Detail label="Phone" value={order.phone} /><Detail label="Order date" value={formatDate(order.orderDate)} /><Detail label="Product" value={order.product} /><Detail label="Quantity" value={`${order.quantity.toLocaleString('en-IN')} bags`} /></dl></div><div className="surface p-5"><h2 className="text-lg font-bold text-navy-900">Activity history</h2><p className="text-sm text-slate-500">A clear record of who changed what and when.</p><ol className="mt-4 space-y-4">{order.activity.map((item) => <li className="relative border-l-2 border-slate-200 pl-4" key={item.id}><span className="absolute -left-[5px] top-1 size-2 rounded-full bg-sky-500" /><p className="text-sm font-semibold text-slate-800">{item.message}</p><p className="mt-1 text-xs text-slate-500">{item.actor} · {formatDateTime(item.at)}</p></li>)}</ol></div></section>
-    {selected && selectedState && <div className="fixed inset-0 z-40 flex justify-end bg-navy-950/50" onMouseDown={(event) => { if (event.currentTarget === event.target) setSelected(null) }}><aside className="h-full w-full max-w-lg overflow-y-auto bg-white p-5 shadow-2xl" aria-label={`${stageInfo[selected].label} details`}><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Workflow step</p><h2 className="mt-1 text-2xl font-bold text-navy-900">{stageInfo[selected].label}</h2></div><button className="grid size-11 place-items-center rounded-xl hover:bg-slate-100" onClick={() => setSelected(null)} aria-label="Close stage details"><X /></button></div><div className="mt-5"><StatusBadge status={selectedState.status} /></div><p className="mt-4 rounded-xl bg-sky-50 p-4 text-sm leading-6 text-sky-900">{stageInfo[selected].help}</p><dl className="mt-5 divide-y divide-slate-100"><Detail label="Responsible person" value={selectedState.owner} /><Detail label="Started" value={formatDateTime(selectedState.startedAt)} /><Detail label="Completed" value={formatDateTime(selectedState.completedAt)} />{selectedState.note && <Detail label="Latest note" value={selectedState.note} />}</dl>
-      {selectedState.status === 'in_progress' && ['cutting', 'printing', 'stitching', 'packing'].includes(selected) && <div className="mt-5 rounded-xl border border-slate-200 p-4"><label className="label" htmlFor="completed-qty">Completed quantity</label><div className="flex gap-2"><input id="completed-qty" className="field" type="number" min="0" max={order.quantity} value={quantity} onChange={(event) => setQuantity(event.target.value === '' ? '' : Number(event.target.value))} /><button className="secondary-button shrink-0" disabled={!manage || quantity === ''} onClick={() => ask('progress')}>Update</button></div><p className="mt-2 text-xs text-slate-500">Maximum: {order.quantity.toLocaleString('en-IN')} bags</p></div>}
-      <div className="mt-6 space-y-3">{!manage && <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>View only:</strong> This step belongs to {selectedState.owner}. Your role cannot change it.</p>}{manage && selectedState.status === 'ready' && <button className="primary-button w-full" onClick={() => ask('start')}>Start this work</button>}{manage && selectedState.status === 'in_progress' && <button className="primary-button w-full" onClick={() => ask('complete')}>Mark work completed</button>}{manage && ['blocked', 'issue'].includes(selectedState.status) && <button className="primary-button w-full" onClick={() => ask('resolve')}>Confirm issue resolved</button>}<button className="secondary-button w-full" onClick={() => setSelected(null)}>Close without changes</button></div></aside></div>}
-    <ConfirmDialog open={!!pending} title={pending?.title ?? ''} message={pending?.message ?? ''} confirmLabel={pending?.action === 'complete' ? 'Yes, mark complete' : 'Yes, continue'} onCancel={() => setPending(null)} onConfirm={() => { if (pending && selected) updateStage(order.id, selected, pending.action, typeof quantity === 'number' ? quantity : undefined); setPending(null); setSelected(null) }} />
-  </>
+  };
+  const progress = async () => {
+    if (!selected || quantity === "") return;
+    try {
+      const updated = await updateStage(order, selected, {
+        action: "progress",
+        completedQuantity: quantity,
+        note: note || undefined,
+        data: stageData(selected),
+      });
+      setOrder(updated);
+    } catch {
+      /* toast is shown by context */
+    }
+  };
+  const cancelOrder = async () => {
+    setBusy(true);
+    try {
+      const updated = await api.cancelOrder(order, cancelReason.trim());
+      setOrder(updated);
+      setCancelPending(false);
+      toast("Order cancelled. Private artwork will be deleted after 30 days.");
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Could not cancel order.",
+        "error",
+      );
+      setCancelPending(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const stageData = (stage: StageKey) => {
+    const result: Record<string, unknown> = {};
+    document
+      .querySelectorAll<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >(`[data-stage-form="${stage}"] [name]`)
+      .forEach((element) => {
+        result[element.name] =
+          element.type === "number" ? Number(element.value) : element.value;
+      });
+    return result;
+  };
+  return (
+    <>
+      <button
+        className="mb-4 inline-flex min-h-11 items-center gap-2 font-semibold text-slate-600"
+        onClick={() => navigate(-1)}
+      >
+        <ArrowLeft className="size-5" />
+        Back to orders
+      </button>
+      <section className="surface overflow-hidden">
+        <div className="bg-navy-900 p-5 text-white md:p-7">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="font-bold text-orange-300">{order.orderNumber}</p>
+              <h1 className="mt-1 text-2xl font-extrabold md:text-3xl">
+                {order.customer}
+              </h1>
+              <p className="mt-2 text-sm text-slate-300">
+                {order.product} · {order.quantity.toLocaleString("en-IN")} bags
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/10 p-3">
+              <p className="text-xs text-slate-300">Current responsibility</p>
+              <p className="font-bold">{stageInfo[order.currentStage].label}</p>
+              <StatusBadge status={order.stages[order.currentStage].status} />
+            </div>
+          </div>
+          <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/15 pt-5 md:grid-cols-4">
+            {canViewPrices(currentUser.role) && (
+              <Summary label="Value" value={money(order.amount)} />
+            )}
+            <Summary
+              label="Expected delivery"
+              value={date(order.expectedDelivery)}
+            />
+            <Summary label="Priority" value={order.priority.toUpperCase()} />
+            <Summary label="Version" value={`#${order.version}`} />
+          </div>
+        </div>
+      </section>
+      <section className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-5">
+        <p className="eyebrow">What should happen next?</p>
+        <h2 className="mt-2 text-lg font-bold text-navy-900">
+          {nextInstruction(order)}
+        </h2>
+        <button
+          className="primary-button mt-4"
+          onClick={() => {
+            setSelected(order.currentStage);
+            setQuantity(
+              order.stages[order.currentStage].completedQuantity ?? "",
+            );
+          }}
+        >
+          Open next action
+          <ChevronRight className="size-4" />
+        </button>
+      </section>
+      {(currentUser.role === "admin" ||
+        currentUser.role === "designer" ||
+        currentUser.role === "order_manager") && (
+        <DesignWorkspace order={order} setOrder={setOrder} reload={reload} />
+      )}
+      <div className="mt-4">
+        <WorkflowMap
+          order={order}
+          onSelect={(stage) => {
+            setSelected(stage);
+            setQuantity(order.stages[stage].completedQuantity ?? "");
+            setNote(order.stages[stage].note ?? "");
+          }}
+        />
+      </div>
+      <section className="mt-4 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
+        <div className="surface p-5">
+          <h2 className="font-bold text-navy-900">Customer and order</h2>
+          <dl className="mt-3">
+            <Detail label="Contact" value={order.contactPerson} />
+            {order.phone && <Detail label="Phone" value={order.phone} />}
+            <Detail label="Order date" value={date(order.orderDate)} />
+            <Detail label="Delivery" value={date(order.expectedDelivery)} />
+          </dl>
+        </div>
+        <div className="surface p-5">
+          <h2 className="font-bold text-navy-900">Activity history</h2>
+          <p className="text-sm text-slate-500">Who changed what and when.</p>
+          <ol className="mt-4 space-y-4">
+            {order.activity?.map((item) => (
+              <li className="border-l-2 border-slate-200 pl-4" key={item.id}>
+                <p className="text-sm font-semibold">{item.message}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {item.actorName} · {dateTime(item.at)}
+                </p>
+              </li>
+            ))}
+            {!order.activity?.length && (
+              <p className="text-sm text-slate-500">
+                No activity recorded yet.
+              </p>
+            )}
+          </ol>
+        </div>
+      </section>
+      {order.status === "active" &&
+        (currentUser.role === "admin" ||
+          currentUser.role === "order_manager") && (
+          <section className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-5">
+            <h2 className="font-bold text-red-900">
+              Need to cancel this order?
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-red-800">
+              Use this only when production must stop. The reason is permanently
+              saved in the activity history.
+            </p>
+            <label className="label mt-4" htmlFor="cancel-order-reason">
+              Reason for cancellation
+            </label>
+            <textarea
+              id="cancel-order-reason"
+              className="field min-h-20 py-3"
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              placeholder="Example: Customer cancelled the requirement"
+            />
+            <button
+              className="secondary-button mt-3 !border-red-300 !text-red-800"
+              disabled={busy}
+              onClick={() =>
+                cancelReason.trim().length >= 3
+                  ? setCancelPending(true)
+                  : toast(
+                      "Write a short reason before cancelling this order.",
+                      "error",
+                    )
+              }
+            >
+              Cancel this order
+            </button>
+          </section>
+        )}
+      {selected && state && (
+        <div
+          className="fixed inset-0 z-40 flex justify-end bg-navy-950/50"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setSelected(null);
+          }}
+        >
+          <aside className="h-full w-full max-w-lg overflow-y-auto bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="eyebrow">Workflow action</p>
+                <h2 className="mt-1 text-2xl font-bold text-navy-900">
+                  {stageInfo[selected].label}
+                </h2>
+              </div>
+              <button
+                className="grid size-11 place-items-center"
+                onClick={() => setSelected(null)}
+              >
+                <X />
+              </button>
+            </div>
+            <div className="mt-4">
+              <StatusBadge status={state.status} />
+            </div>
+            <p className="mt-4 rounded-xl bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+              {stageInfo[selected].help}
+            </p>
+            <StageFields
+              stage={selected}
+              quantity={quantity}
+              setQuantity={setQuantity}
+              note={note}
+              setNote={setNote}
+              order={order}
+            />
+            {!manage && (
+              <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <strong>View only:</strong> This step belongs to{" "}
+                {roleLabels[stageInfo[selected].role]}.
+              </p>
+            )}
+            <div className="mt-6 space-y-3">
+              {manage && state.status === "ready" && (
+                <button
+                  className="primary-button w-full"
+                  onClick={() => ask("start")}
+                >
+                  Start this work
+                </button>
+              )}
+              {manage &&
+                state.status === "in_progress" &&
+                selected !== "design" && (
+                  <>
+                    <button
+                      className="secondary-button w-full"
+                      onClick={progress}
+                    >
+                      Save progress
+                    </button>
+                    <button
+                      className="primary-button w-full"
+                      onClick={() => ask("complete")}
+                    >
+                      Mark work completed
+                    </button>
+                    <button
+                      className="secondary-button w-full !border-red-200 !text-red-700"
+                      onClick={() => ask("block")}
+                    >
+                      Report an issue
+                    </button>
+                  </>
+                )}
+              {manage && ["blocked", "issue"].includes(state.status) && (
+                <button
+                  className="primary-button w-full"
+                  onClick={() => ask("resolve")}
+                >
+                  Resolve issue
+                </button>
+              )}
+              <button
+                className="secondary-button w-full"
+                onClick={() => setSelected(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+      <ConfirmDialog
+        open={!!pending}
+        title={pending?.title ?? ""}
+        message={pending?.message ?? ""}
+        confirmLabel={`Yes, ${pending?.action ?? "continue"}`}
+        onCancel={() => setPending(null)}
+        onConfirm={() => void execute()}
+      />
+      <ConfirmDialog
+        open={cancelPending}
+        title="Cancel this entire order?"
+        message="Production will stop, active customer review links will be revoked, and private artwork will be scheduled for deletion after 30 days. This action is recorded in the activity history."
+        confirmLabel="Yes, cancel this order"
+        onCancel={() => setCancelPending(false)}
+        onConfirm={() => void cancelOrder()}
+      />
+    </>
+  );
 }
 
-function Summary({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs font-semibold text-slate-400">{label}</dt><dd className="mt-1 text-sm font-bold text-white">{value}</dd></div> }
-function Detail({ label, value }: { label: string; value: string }) { return <div className="flex items-start justify-between gap-4 py-3"><dt className="text-sm text-slate-500">{label}</dt><dd className="text-right text-sm font-semibold text-slate-800">{value}</dd></div> }
+function StageFields({
+  stage,
+  quantity,
+  setQuantity,
+  note,
+  setNote,
+  order,
+}: {
+  stage: StageKey;
+  quantity: number | "";
+  setQuantity: (value: number | "") => void;
+  note: string;
+  setNote: (value: string) => void;
+  order: Order;
+}) {
+  const quantityStages = ["cutting", "printing", "stitching", "packing"];
+  return (
+    <div className="mt-5" data-stage-form={stage}>
+      {quantityStages.includes(stage) && (
+        <>
+          <label className="label">Completed quantity</label>
+          <input
+            className="field"
+            type="number"
+            min="0"
+            max={order.quantity}
+            value={quantity}
+            onChange={(event) =>
+              setQuantity(
+                event.target.value === "" ? "" : Number(event.target.value),
+              )
+            }
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Maximum {order.quantity.toLocaleString("en-IN")} bags
+          </p>
+        </>
+      )}
+      <DynamicFields stage={stage} />
+      <label className="label mt-4">Note / issue explanation</label>
+      <textarea
+        className="field min-h-24 py-3"
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        placeholder="Write helpful information for the next person"
+      />
+    </div>
+  );
+}
+function DynamicFields({ stage }: { stage: StageKey }) {
+  if (stage === "material")
+    return (
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <Field
+          name="requiredQuantity"
+          label="Required material"
+          type="number"
+          min="0"
+        />
+        <Field
+          name="availableQuantity"
+          label="Available material"
+          type="number"
+          min="0"
+        />
+      </div>
+    );
+  if (stage === "printing")
+    return (
+      <>
+        <Field name="machine" label="Printing machine" />
+        <Field name="operatorNote" label="Print details" />
+      </>
+    );
+  if (stage === "packing")
+    return (
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <Field name="boxes" label="Number of boxes" type="number" min="0" />
+        <Field name="weightKg" label="Weight (kg)" type="number" min="0" />
+      </div>
+    );
+  if (stage === "dc") return <Field name="challanNumber" label="D.C. number" />;
+  if (stage === "billing")
+    return (
+      <>
+        <Field name="invoiceNumber" label="Invoice number" />
+        <Field
+          name="invoiceAmount"
+          label="Invoice amount"
+          type="number"
+          min="0"
+        />
+      </>
+    );
+  if (stage === "payment")
+    return (
+      <>
+        <Field name="paymentReference" label="Payment reference" />
+        <Field name="paidAmount" label="Paid amount" type="number" min="0" />
+      </>
+    );
+  if (stage === "dispatch")
+    return (
+      <>
+        <Field name="transporter" label="Transporter" />
+        <Field name="trackingNumber" label="Tracking number" />
+      </>
+    );
+  if (stage === "return" || stage === "refund")
+    return (
+      <Field
+        name="reference"
+        label={`${stage === "return" ? "Return" : "Refund"} reference`}
+      />
+    );
+  return null;
+}
 
-function TeamPage() { const { users } = useApp(); return <><PageHeading eyebrow="People and permissions" title="Team responsibilities" description="Every user gets a focused workspace. Sensitive customer and financial information is available only to permitted roles." /><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{users.map((user) => <article className="surface p-4" key={user.id}><div className="flex items-center gap-3"><span className="grid size-12 place-items-center rounded-full bg-navy-900 font-bold text-white">{user.initials}</span><div className="min-w-0"><h2 className="truncate font-bold text-navy-900">{user.name}</h2><p className="truncate text-sm text-slate-500">{roleLabels[user.role]}</p></div></div><div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm"><b className="text-slate-700">Primary responsibility</b><p className="mt-1 text-slate-600">{user.department}</p></div></article>)}</div></> }
+function DesignWorkspace({
+  order,
+  setOrder,
+  reload,
+}: {
+  order: Order;
+  setOrder: (order: Order) => void;
+  reload: () => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState("");
+  const [confirm, setConfirm] = useState<{
+    type: "no-image" | "review";
+    asset?: DesignAsset;
+  } | null>(null);
+  const [noImageNote, setNoImageNote] = useState(
+    "Customer confirmed that no image was supplied.",
+  );
+  const assets = order.designAssets ?? [];
+  const [staffOpen, setStaffOpen] = useState(false);
+  const [staffDecision, setStaffDecision] = useState<
+    "approved" | "changes_requested"
+  >("approved");
+  const [channel, setChannel] = useState("whatsapp");
+  const [customerName, setCustomerName] = useState(order.contactPerson);
+  const [staffReason, setStaffReason] = useState("");
+  const [staffConfirm, setStaffConfirm] = useState(false);
+  const activeReviewAsset = assets.find(
+    (asset) => asset.status === "in_review",
+  );
+  const upload = async () => {
+    if (!file) return;
+    if (
+      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      file.size > 10 * 1024 * 1024
+    )
+      return toast("Choose a JPG, PNG, or WebP image up to 10 MB.", "error");
+    setBusy(true);
+    try {
+      const intent = await api.uploadIntent(order.id, file);
+      await api.uploadToR2(intent.uploadUrl, file, setProgress);
+      await api.completeUpload(intent.asset.id);
+      setOrder(await api.order(order.id));
+      setFile(null);
+      setProgress(0);
+      toast("Design image uploaded and verified.");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Upload failed.", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const view = async (asset: DesignAsset) => {
+    try {
+      const result = await api.viewAsset(asset.id);
+      window.open(result.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Image unavailable.",
+        "error",
+      );
+    }
+  };
+  const createLink = async (asset: DesignAsset) => {
+    setBusy(true);
+    try {
+      const result = await api.reviewLink(order.id, asset.id);
+      const url = `${window.location.origin}${result.path}`;
+      setLink(url);
+      await navigator.clipboard.writeText(url).catch(() => undefined);
+      setOrder(await api.order(order.id));
+      toast("Secure seven-day link created and copied.");
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Could not create link.",
+        "error",
+      );
+    } finally {
+      setBusy(false);
+      setConfirm(null);
+    }
+  };
+  const noImage = async () => {
+    setBusy(true);
+    try {
+      const updated = await api.noImage(order, noImageNote);
+      setOrder({ ...updated, activity: order.activity, designAssets: assets });
+      await reload();
+      toast("No customer image confirmed. Plate preparation is now ready.");
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Could not confirm.",
+        "error",
+      );
+    } finally {
+      setBusy(false);
+      setConfirm(null);
+    }
+  };
+  const recordStaffResponse = async () => {
+    if (!activeReviewAsset) return;
+    if (staffDecision === "changes_requested" && staffReason.trim().length < 3)
+      return toast("Explain what the customer wants changed.", "error");
+    setBusy(true);
+    try {
+      await api.staffDecision(order.id, {
+        assetId: activeReviewAsset.id,
+        decision: staffDecision,
+        channel,
+        customerName,
+        reason: staffReason || undefined,
+      });
+      setOrder(await api.order(order.id));
+      setStaffOpen(false);
+      setStaffConfirm(false);
+      toast("Customer response recorded with staff details.");
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Could not record response.",
+        "error",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="surface mt-4 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="eyebrow">Optional artwork</p>
+          <h2 className="mt-1 text-xl font-bold text-navy-900">
+            Design versions and approval
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Upload a new version without replacing previous customer decisions.
+          </p>
+        </div>
+        {order.stages.design.status !== "completed" && (
+          <button
+            className="secondary-button"
+            onClick={() => setConfirm({ type: "no-image" })}
+          >
+            No customer image
+          </button>
+        )}
+      </div>
+      <div className="mt-5 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
+        <div className="rounded-xl border-2 border-dashed border-slate-300 p-5 text-center">
+          <ImagePlus className="mx-auto size-9 text-slate-400" />
+          <label className="primary-button mt-4">
+            <Upload className="size-4" />
+            Choose image
+            <input
+              className="sr-only"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+          <p className="mt-3 text-xs text-slate-500">
+            JPG, PNG or WebP · Maximum 10 MB
+          </p>
+          {file && (
+            <div className="mt-4 rounded-lg bg-slate-50 p-3 text-left text-sm">
+              <p className="truncate font-semibold">{file.name}</p>
+              <p className="text-xs text-slate-500">
+                {(file.size / 1024 / 1024).toFixed(2)} MB
+              </p>
+              <button
+                className="primary-button mt-3 w-full"
+                onClick={() => void upload()}
+                disabled={busy}
+              >
+                {busy ? `Uploading ${progress}%` : "Upload as new version"}
+              </button>
+            </div>
+          )}
+        </div>
+        <div>
+          <h3 className="font-bold text-navy-900">Version history</h3>
+          <div className="mt-3 space-y-2">
+            {assets.map((asset) => (
+              <article
+                className="rounded-xl border border-slate-200 p-3"
+                key={asset.id}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-bold">
+                      Version {asset.version} · {asset.fileName}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {asset.uploadedByName} · {dateTime(asset.createdAt)}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold">
+                    {asset.status.replace("_", " ")}
+                  </span>
+                </div>
+                {asset.decisionReason && (
+                  <p className="mt-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+                    Customer note: {asset.decisionReason}
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    className="secondary-button"
+                    onClick={() => void view(asset)}
+                    disabled={asset.status === "deleted"}
+                  >
+                    <Eye className="size-4" />
+                    View
+                  </button>
+                  {asset.status === "available" && (
+                    <button
+                      className="primary-button"
+                      onClick={() => setConfirm({ type: "review", asset })}
+                    >
+                      Send for approval
+                    </button>
+                  )}
+                  {asset.status === "in_review" && (
+                    <button
+                      className="secondary-button"
+                      onClick={() => setStaffOpen(true)}
+                    >
+                      Record staff-assisted response
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+            {!assets.length && (
+              <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                No image versions uploaded. Uploading is optional.
+              </p>
+            )}
+          </div>
+          {link && (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <p className="text-sm font-bold text-emerald-900">
+                Customer link (valid 7 days)
+              </p>
+              <div className="mt-2 flex gap-2">
+                <input className="field" readOnly value={link} />
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(link);
+                    toast("Link copied.");
+                  }}
+                >
+                  <Clipboard className="size-4" />
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-emerald-800">
+                Send manually by WhatsApp, email, or SMS.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+      {confirm?.type === "no-image" && (
+        <Modal title="Confirm no customer image" close={() => setConfirm(null)}>
+          <p className="text-sm leading-6 text-slate-600">
+            This completes Design but Plate remains required before Printing.
+          </p>
+          <label className="label mt-4">Confirmation note</label>
+          <textarea
+            className="field min-h-24 py-3"
+            value={noImageNote}
+            onChange={(event) => setNoImageNote(event.target.value)}
+          />
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button
+              className="secondary-button"
+              onClick={() => setConfirm(null)}
+            >
+              Cancel
+            </button>
+            <button
+              className="primary-button"
+              disabled={busy || noImageNote.length < 3}
+              onClick={() => void noImage()}
+            >
+              Yes, confirm
+            </button>
+          </div>
+        </Modal>
+      )}
+      {staffOpen && (
+        <Modal
+          title="Record customer response"
+          close={() => setStaffOpen(false)}
+        >
+          <p className="text-sm leading-6 text-slate-600">
+            Use this only when the customer replied by phone, WhatsApp, or in
+            person. Your account will be recorded in the audit history.
+          </p>
+          <label className="label mt-4">Customer name</label>
+          <input
+            className="field"
+            value={customerName}
+            onChange={(event) => setCustomerName(event.target.value)}
+          />
+          <label className="label mt-4">Response channel</label>
+          <select
+            className="field"
+            value={channel}
+            onChange={(event) => setChannel(event.target.value)}
+          >
+            <option value="whatsapp">WhatsApp</option>
+            <option value="phone">Phone</option>
+            <option value="in_person">In person</option>
+          </select>
+          <label className="label mt-4">Customer decision</label>
+          <select
+            className="field"
+            value={staffDecision}
+            onChange={(event) =>
+              setStaffDecision(
+                event.target.value as "approved" | "changes_requested",
+              )
+            }
+          >
+            <option value="approved">Approved</option>
+            <option value="changes_requested">Requested changes</option>
+          </select>
+          {staffDecision === "changes_requested" && (
+            <>
+              <label className="label mt-4">What should change?</label>
+              <textarea
+                className="field min-h-24 py-3"
+                value={staffReason}
+                onChange={(event) => setStaffReason(event.target.value)}
+              />
+            </>
+          )}
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button
+              className="secondary-button"
+              onClick={() => setStaffOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="primary-button"
+              disabled={
+                customerName.length < 2 ||
+                (staffDecision === "changes_requested" &&
+                  staffReason.length < 3)
+              }
+              onClick={() => setStaffConfirm(true)}
+            >
+              Review response
+            </button>
+          </div>
+        </Modal>
+      )}
+      <ConfirmDialog
+        open={confirm?.type === "review"}
+        title="Send this design to the customer?"
+        message={`Version ${confirm?.asset?.version ?? ""} will become the only active review. Any older customer link will stop working.`}
+        confirmLabel="Yes, create link"
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => {
+          if (confirm?.asset) void createLink(confirm.asset);
+        }}
+      />
+      <ConfirmDialog
+        open={staffConfirm}
+        title="Record this customer decision?"
+        message={
+          staffDecision === "approved"
+            ? `Confirm that ${customerName} approved this design via ${channel}. Plate preparation will become ready.`
+            : `Confirm that ${customerName} requested changes via ${channel}. The designer will need to create a new version.`
+        }
+        confirmLabel={
+          staffDecision === "approved"
+            ? "Yes, record approval"
+            : "Yes, request changes"
+        }
+        onCancel={() => setStaffConfirm(false)}
+        onConfirm={() => void recordStaffResponse()}
+      />
+    </section>
+  );
+}
+
+function TeamPage() {
+  const { users, createUser, currentUser, reload } = useApp();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [role, setRole] = useState<Role>("order_manager");
+  const [managedUser, setManagedUser] = useState<User | null>(null);
+  const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [accountAction, setAccountAction] = useState<
+    "activate" | "deactivate" | "reset" | null
+  >(null);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const form = new FormData(event.currentTarget);
+    try {
+      await createUser({
+        name: String(form.get("name")),
+        email: String(form.get("email")),
+        role,
+        department: String(form.get("department")),
+        temporaryPassword: String(form.get("temporaryPassword")),
+      });
+      setOpen(false);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not create account.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const confirmAccountAction = async () => {
+    if (!managedUser || !accountAction) return;
+    setBusy(true);
+    try {
+      if (accountAction === "reset") {
+        await api.resetPassword(managedUser.id, temporaryPassword);
+        toast(
+          "Temporary password reset. The employee must change it after sign-in.",
+        );
+      } else {
+        await api.updateUser(managedUser.id, {
+          active: accountAction === "activate",
+        });
+        toast(
+          accountAction === "activate"
+            ? "Staff account activated."
+            : "Staff account deactivated and signed out on all devices.",
+        );
+      }
+      await reload();
+      setAccountAction(null);
+      setManagedUser(null);
+      setTemporaryPassword("");
+    } catch (err) {
+      toast(
+        err instanceof Error ? err.message : "Account update failed.",
+        "error",
+      );
+      setAccountAction(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <Heading
+        eyebrow="People and permissions"
+        title="Team accounts"
+        description="Create only the accounts each employee needs. Permissions are enforced by FastAPI."
+        action={
+          <button className="primary-button" onClick={() => setOpen(true)}>
+            <Plus className="size-4" />
+            Add staff member
+          </button>
+        }
+      />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {users.map((user) => (
+          <article className="surface p-4" key={user.id}>
+            <div className="flex items-center gap-3">
+              <span className="grid size-12 place-items-center rounded-full bg-navy-900 font-bold text-white">
+                {user.initials}
+              </span>
+              <div className="min-w-0">
+                <h2 className="truncate font-bold">{user.name}</h2>
+                <p className="truncate text-sm text-slate-500">
+                  {roleLabels[user.role]}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-3 text-sm">
+              <span>{user.department}</span>
+              <span
+                className={`font-bold ${user.active ? "text-emerald-700" : "text-red-700"}`}
+              >
+                {user.active ? "Active" : "Inactive"}
+              </span>
+            </div>
+            <button
+              className="secondary-button mt-3 w-full"
+              onClick={() => setManagedUser(user)}
+            >
+              Manage account
+            </button>
+          </article>
+        ))}
+        {!users.length && (
+          <Empty
+            title="Only the bootstrap Admin exists"
+            text="Create accounts for each department before practical workflow testing."
+          />
+        )}
+      </div>
+      {open && (
+        <Modal title="Create staff account" close={() => setOpen(false)}>
+          <form onSubmit={submit}>
+            <Field name="name" label="Full name" required />
+            <Field name="email" label="Work email" type="email" required />
+            <label className="label mt-4">Role</label>
+            <select
+              className="field"
+              value={role}
+              onChange={(event) => setRole(event.target.value as Role)}
+            >
+              {Object.entries(roleLabels)
+                .filter(([key]) => key !== "admin")
+                .map(([key, value]) => (
+                  <option value={key} key={key}>
+                    {value}
+                  </option>
+                ))}
+            </select>
+            <label className="label mt-4">Department</label>
+            <input
+              className="field"
+              name="department"
+              value={departmentFor[role]}
+              readOnly
+            />
+            <Field
+              name="temporaryPassword"
+              label="Temporary password"
+              type="password"
+              minLength={10}
+              required
+            />
+            {error && <ErrorText>{error}</ErrorText>}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </button>
+              <button className="primary-button" disabled={busy}>
+                {busy ? "Creating…" : "Create account"}
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              The employee must change this password after first sign-in.
+            </p>
+          </form>
+        </Modal>
+      )}
+      {managedUser && (
+        <Modal
+          title={`Manage ${managedUser.name}`}
+          close={() => {
+            setManagedUser(null);
+            setTemporaryPassword("");
+          }}
+        >
+          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+            {managedUser.email}
+            <br />
+            <strong>{roleLabels[managedUser.role]}</strong> ·{" "}
+            {managedUser.department}
+          </p>
+          <label className="label mt-5" htmlFor="reset-password">
+            New temporary password
+          </label>
+          <input
+            id="reset-password"
+            className="field"
+            type="password"
+            minLength={10}
+            value={temporaryPassword}
+            onChange={(event) => setTemporaryPassword(event.target.value)}
+            placeholder="At least 10 characters"
+          />
+          <button
+            className="secondary-button mt-3 w-full"
+            disabled={temporaryPassword.length < 10 || busy}
+            onClick={() => setAccountAction("reset")}
+          >
+            Reset temporary password
+          </button>
+          {managedUser.id !== currentUser?.id && (
+            <button
+              className={`mt-3 w-full ${managedUser.active ? "secondary-button !border-red-200 !text-red-700" : "primary-button"}`}
+              disabled={busy}
+              onClick={() =>
+                setAccountAction(managedUser.active ? "deactivate" : "activate")
+              }
+            >
+              {managedUser.active ? "Deactivate account" : "Activate account"}
+            </button>
+          )}
+          {managedUser.id === currentUser?.id && (
+            <p className="mt-3 text-xs text-slate-500">
+              You cannot deactivate the account you are currently using.
+            </p>
+          )}
+        </Modal>
+      )}
+      <ConfirmDialog
+        open={accountAction !== null}
+        title={
+          accountAction === "reset"
+            ? "Reset this password?"
+            : accountAction === "deactivate"
+              ? "Deactivate this account?"
+              : "Activate this account?"
+        }
+        message={
+          accountAction === "reset"
+            ? "The employee will be signed out on every device and must use the new temporary password."
+            : accountAction === "deactivate"
+              ? "The employee will be signed out and cannot access any orders until an Admin activates the account again."
+              : "The employee will be able to sign in and see work allowed for this role."
+        }
+        confirmLabel={
+          accountAction === "reset"
+            ? "Yes, reset password"
+            : accountAction === "deactivate"
+              ? "Yes, deactivate account"
+              : "Yes, activate account"
+        }
+        onCancel={() => setAccountAction(null)}
+        onConfirm={() => void confirmAccountAction()}
+      />
+    </>
+  );
+}
 
 function MorePage() {
-  const { currentUser, logout, resetDemo } = useApp()
-  const [resetOpen, setResetOpen] = useState(false)
-  return <><PageHeading eyebrow="Settings and help" title="More options" description="Account actions and demo controls are collected here to keep daily work screens simple." /><div className="grid gap-4 lg:grid-cols-2"><section className="surface p-5"><h2 className="font-bold text-navy-900">Signed-in account</h2><p className="mt-1 text-sm text-slate-500">{currentUser?.name} · {currentUser && roleLabels[currentUser.role]}</p><button className="secondary-button mt-5 w-full" onClick={logout}><LogOut className="size-4" />Sign out safely</button></section><section className="surface p-5"><h2 className="font-bold text-navy-900">Demo data</h2><p className="mt-1 text-sm leading-6 text-slate-500">Restore all orders and workflow progress to the original presentation state.</p><button className="secondary-button mt-5 w-full" onClick={() => setResetOpen(true)}><RotateCcw className="size-4" />Reset demo data</button></section><section className="surface p-5"><h2 className="flex items-center gap-2 font-bold text-navy-900"><HelpCircle className="size-5 text-sky-600" />Need help?</h2><p className="mt-2 text-sm leading-6 text-slate-600">Open an order and look for the blue “What should happen next?” card. It explains the next responsibility in plain language.</p></section><section className="surface p-5"><h2 className="font-bold text-navy-900">Language</h2><p className="mt-1 text-sm text-slate-500">English is active. Marathi translations are planned for the next implementation slice.</p><button className="secondary-button mt-5 w-full" disabled>मराठी — Coming next</button></section></div><ConfirmDialog open={resetOpen} title="Reset all demo progress?" message="This will remove stage changes made during the demonstration and restore the original sample orders. It cannot be undone." confirmLabel="Yes, reset demo" onCancel={() => setResetOpen(false)} onConfirm={() => { resetDemo(); setResetOpen(false) }} /></>
+  const { currentUser, logout } = useApp();
+  return (
+    <>
+      <Heading
+        eyebrow="Settings and help"
+        title="More options"
+        description="Account actions are kept away from daily production buttons."
+      />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="surface p-5">
+          <h2 className="font-bold">Signed-in account</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {currentUser?.name} · {currentUser && roleLabels[currentUser.role]}
+          </p>
+          <button
+            className="secondary-button mt-5 w-full"
+            onClick={() => void logout()}
+          >
+            <LogOut className="size-4" />
+            Sign out safely
+          </button>
+        </section>
+        <section className="surface p-5">
+          <h2 className="flex items-center gap-2 font-bold">
+            <HelpCircle className="size-5 text-sky-600" />
+            How do I know what to do?
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Open an order and read the blue “What should happen next?” card.
+            Only actions allowed for your role will be enabled.
+          </p>
+        </section>
+        <section className="surface p-5">
+          <h2 className="font-bold">Data source</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            All customers, orders, users, and activity come from MongoDB Atlas.
+            There is no browser demo-data reset.
+          </p>
+        </section>
+        <section className="surface p-5">
+          <h2 className="font-bold">Image privacy</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Artwork uses private temporary links and is scheduled for deletion
+            30 days after an order closes.
+          </p>
+        </section>
+      </div>
+    </>
+  );
+}
+
+function ReviewPage() {
+  const { token } = useParams();
+  const [review, setReview] = useState<Awaited<
+    ReturnType<typeof api.publicReview>
+  > | null>(null);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState("");
+  const [name, setName] = useState("");
+  const [decision, setDecision] = useState<
+    "approved" | "changes_requested" | ""
+  >("");
+  const [reason, setReason] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(true);
+  useEffect(() => {
+    if (token)
+      api
+        .publicReview(token)
+        .then(setReview)
+        .catch((err) => setError(err.message))
+        .finally(() => setBusy(false));
+  }, [token]);
+  const submit = async () => {
+    if (!token || !decision) return;
+    if (decision === "changes_requested" && reason.trim().length < 3)
+      return toast("Explain what needs to change.", "error");
+    setBusy(true);
+    try {
+      const result = await api.publicDecision(token, {
+        decision,
+        customerName: name,
+        reason: reason || undefined,
+      });
+      setDone(result.message);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not record decision.",
+      );
+    } finally {
+      setBusy(false);
+      setConfirm(false);
+    }
+  };
+  if (busy && !review) return <LoadingScreen />;
+  if (error && !review)
+    return (
+      <ServiceScreen message={error} retry={() => window.location.reload()} />
+    );
+  if (done)
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-50 p-4">
+        <section className="surface max-w-md p-7 text-center">
+          <CheckCircle2 className="mx-auto size-14 text-emerald-600" />
+          <h1 className="mt-4 text-2xl font-bold">Thank you</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{done}</p>
+          <p className="mt-4 text-xs text-slate-500">
+            You may close this page.
+          </p>
+        </section>
+      </main>
+    );
+  return (
+    <main className="min-h-screen bg-slate-50 p-4 md:p-7">
+      <div className="mx-auto max-w-4xl">
+        <Brand />
+        <section className="surface mt-6 overflow-hidden">
+          <div className="bg-navy-900 p-5 text-white">
+            <p className="text-sm text-orange-300">
+              Design approval · {review?.orderNumber}
+            </p>
+            <h1 className="mt-1 text-2xl font-bold">
+              Please review design version {review?.version}
+            </h1>
+            <p className="mt-2 text-sm text-slate-300">
+              {review?.customer} · {review?.product}
+            </p>
+          </div>
+          <div className="p-4 md:p-6">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+              <img
+                className="mx-auto max-h-[60vh] w-auto object-contain"
+                src={review?.imageUrl}
+                alt={`Design version ${review?.version}`}
+              />
+            </div>
+            <p className="mt-2 text-center text-xs text-slate-500">
+              Pinch or open the image to zoom. Link expires{" "}
+              {dateTime(review?.expiresAt)}.
+            </p>
+            <label className="label mt-5">Your name</label>
+            <input
+              className="field"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Person approving this design"
+            />
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button
+                className={`min-h-14 rounded-xl border-2 p-3 font-bold ${decision === "approved" ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white"}`}
+                onClick={() => setDecision("approved")}
+              >
+                <CheckCircle2 className="mx-auto mb-1 size-5" />
+                Approve Design
+              </button>
+              <button
+                className={`min-h-14 rounded-xl border-2 p-3 font-bold ${decision === "changes_requested" ? "border-amber-500 bg-amber-50 text-amber-900" : "border-slate-200 bg-white"}`}
+                onClick={() => setDecision("changes_requested")}
+              >
+                <RefreshCw className="mx-auto mb-1 size-5" />
+                Request Changes
+              </button>
+            </div>
+            {decision === "changes_requested" && (
+              <>
+                <label className="label mt-4">What needs to change?</label>
+                <textarea
+                  className="field min-h-28 py-3"
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="Please explain clearly so the designer can update it"
+                />
+              </>
+            )}
+            <button
+              className="primary-button mt-5 w-full"
+              disabled={!decision || name.trim().length < 2}
+              onClick={() => setConfirm(true)}
+            >
+              Review my decision
+            </button>
+          </div>
+        </section>
+      </div>
+      <ConfirmDialog
+        open={confirm}
+        title={
+          decision === "approved"
+            ? "Approve this design?"
+            : "Send change request?"
+        }
+        message={
+          decision === "approved"
+            ? "After confirmation, the Design stage completes and Plate preparation can begin."
+            : "Your reason will be sent to the designer, who will create a new version."
+        }
+        confirmLabel={
+          decision === "approved"
+            ? "Yes, approve design"
+            : "Yes, request changes"
+        }
+        onCancel={() => setConfirm(false)}
+        onConfirm={() => void submit()}
+      />
+    </main>
+  );
+}
+
+function Modal({
+  title,
+  close,
+  children,
+}: {
+  title: string;
+  close: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-navy-950/55 p-3 sm:items-center"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) close();
+      }}
+    >
+      <section
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-navy-900">{title}</h2>
+          <button className="grid size-11 place-items-center" onClick={close}>
+            <X />
+          </button>
+        </div>
+        <div className="mt-4">{children}</div>
+      </section>
+    </div>
+  );
+}
+function Field({
+  name,
+  label,
+  type = "text",
+  ...props
+}: {
+  name: string;
+  label: string;
+  type?: string;
+  [key: string]: unknown;
+}) {
+  return (
+    <label>
+      <span className="label mt-4">{label}</span>
+      <input className="field" name={name} type={type} {...props} />
+    </label>
+  );
+}
+function ErrorText({ children }: { children: ReactNode }) {
+  return (
+    <p
+      className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
+      role="alert"
+    >
+      {children}
+    </p>
+  );
+}
+function Summary({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-bold">{value}</p>
+    </div>
+  );
+}
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 border-b border-slate-100 py-3 text-sm">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="text-right font-semibold">{value}</dd>
+    </div>
+  );
 }
 
 function App() {
-  const { currentUser } = useApp()
-  if (!currentUser) return <LoginPage />
-  return <Shell><Routes><Route path="/" element={<DashboardPage />} /><Route path="/orders" element={<OrdersPage />} /><Route path="/orders/:id" element={<OrderDetailPage />} /><Route path="/queue" element={<OrdersPage queueOnly />} /><Route path="/team" element={<TeamPage />} /><Route path="/more" element={<MorePage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Shell>
+  const { currentUser, loading, serviceError, reload } = useApp();
+  const location = useLocation();
+  if (location.pathname.startsWith("/review/"))
+    return (
+      <Routes>
+        <Route path="/review/:token" element={<ReviewPage />} />
+      </Routes>
+    );
+  if (loading) return <LoadingScreen />;
+  if (serviceError)
+    return <ServiceScreen message={serviceError} retry={() => void reload()} />;
+  if (!currentUser) return <LoginPage />;
+  if (currentUser.mustChangePassword) return <PasswordChangePage />;
+  return (
+    <Shell>
+      <Routes>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/orders" element={<OrdersPage />} />
+        <Route path="/orders/new" element={<NewOrderPage />} />
+        <Route path="/orders/:id" element={<OrderDetailPage />} />
+        <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/queue" element={<OrdersPage queue />} />
+        <Route
+          path="/team"
+          element={
+            currentUser.role === "admin" ? (
+              <TeamPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route path="/more" element={<MorePage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Shell>
+  );
 }
-
-export default App
+export default App;

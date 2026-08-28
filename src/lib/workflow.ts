@@ -31,21 +31,6 @@ export function isReady(order: Order, stage: StageKey) {
   return (dependencies[stage] ?? []).every((key) => order.stages[key].status === 'completed')
 }
 
-export function deriveOrder(order: Order): Order {
-  const copy = structuredClone(order)
-  for (const stage of productionStages) {
-    const state = copy.stages[stage]
-    if (['not_started', 'waiting', 'ready'].includes(state.status)) {
-      state.status = isReady(copy, stage) ? 'ready' : 'waiting'
-    }
-  }
-  const active = productionStages.find((stage) => ['in_progress', 'blocked', 'issue'].includes(copy.stages[stage].status))
-    ?? productionStages.find((stage) => copy.stages[stage].status === 'ready')
-    ?? 'delivery'
-  copy.currentStage = active
-  return copy
-}
-
 export function canManageStage(role: Role, stage: StageKey) {
   return role === 'admin' || stageInfo[stage].role === role
 }
@@ -62,5 +47,5 @@ export function nextInstruction(order: Order) {
   const state = order.stages[stage]
   if (state.status === 'blocked' || state.status === 'issue') return `Resolve the ${stageInfo[stage].short.toLowerCase()} issue before production can continue.`
   if (state.status === 'in_progress') return `Continue ${stageInfo[stage].short.toLowerCase()} and update the completed quantity.`
-  return `The order is ready for ${stageInfo[stage].short.toLowerCase()}. The ${stageInfo[stage].label} team can start now.`
+  return `The order is ready for ${stageInfo[stage].short.toLowerCase()}. The responsible team can start now.`
 }
