@@ -8,6 +8,7 @@ import {
   useLocation,
   useNavigate,
   useParams,
+  useSearchParams,
 } from "react-router-dom";
 import {
   AlertTriangle,
@@ -354,17 +355,21 @@ function Shell({ children }: { children: ReactNode }) {
     localStorage.getItem("pb-language") === "mr" ? "mr" : "en",
   );
   if (!currentUser) return null;
+  const isSimpleWorker = !["admin", "order_manager"].includes(currentUser.role);
   const canViewCustomers = [
     "admin",
     "order_manager",
     "accountant",
     "dispatch_manager",
   ].includes(currentUser.role);
-  const visibleNav = nav.filter(
-    (item) =>
-      (item.to !== "/team" || currentUser.role === "admin") &&
-      (item.to !== "/customers" || canViewCustomers),
-  );
+  const visibleNav = isSimpleWorker
+    ? nav.filter((item) => ["/queue", "/orders", "/more"].includes(item.to))
+    : nav.filter(
+        (item) =>
+          (item.to !== "/team" || currentUser.role === "admin") &&
+          (item.to !== "/customers" || canViewCustomers),
+      );
+  const mobileNav = visibleNav.filter((item) => item.to !== "/more");
   const issues = orders.filter((order) =>
     Object.values(order.stages).some((state) =>
       ["blocked", "issue"].includes(state.status),
@@ -460,8 +465,8 @@ function Shell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_20px_rgba(15,23,42,.08)] md:hidden">
-        {visibleNav.slice(0, 4).map(({ to, label, mr, icon: Icon }) => (
+      <nav className={`fixed inset-x-0 bottom-0 z-30 grid ${isSimpleWorker ? "grid-cols-3" : "grid-cols-5"} border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_20px_rgba(15,23,42,.08)] md:hidden`}>
+        {mobileNav.slice(0, isSimpleWorker ? 2 : 4).map(({ to, label, mr, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -596,6 +601,8 @@ function Empty({
 function DashboardPage() {
   const { currentUser, orders } = useApp();
   if (!currentUser) return null;
+  if (!["admin", "order_manager"].includes(currentUser.role))
+    return <WorkerHome />;
   const relevant = Object.entries(stageInfo).find(
     ([, info]) => info.role === currentUser.role,
   )?.[0] as StageKey | undefined;
@@ -685,6 +692,64 @@ function DashboardPage() {
           )}
         </div>
       </section>
+    </>
+  );
+}
+
+function WorkerHome() {
+  const { currentUser, orders } = useApp();
+  if (!currentUser) return null;
+  const myStage = Object.entries(stageInfo).find(
+    ([, info]) => info.role === currentUser.role,
+  )?.[0] as StageKey | undefined;
+  const tasks = myStage
+    ? orders.filter((order) =>
+        ["ready", "in_progress", "blocked", "issue"].includes(
+          order.stages[myStage].status,
+        ),
+      )
+    : [];
+  const firstTask = tasks[0];
+  return (
+    <>
+      <Heading
+        eyebrow="My work today"
+        title={`Hello, ${currentUser.name.split(" ")[0]}`}
+        description="Open the first task, complete your part, then the next team is informed automatically."
+      />
+      {firstTask ? (
+        <section className="rounded-2xl bg-navy-900 p-5 text-white shadow-lg">
+          <p className="text-sm font-semibold text-sky-200">Your next task</p>
+          <h2 className="mt-2 text-2xl font-extrabold">{stageInfo[myStage!].label}</h2>
+          <p className="mt-3 text-base text-slate-200">{firstTask.orderNumber} · {firstTask.customer}</p>
+          <p className="mt-1 text-sm text-slate-300">{firstTask.product} · {firstTask.quantity.toLocaleString("en-IN")} bags</p>
+          <Link className="primary-button mt-5" to={`/orders/${firstTask.id}?stage=${myStage}`}>
+            Open my task
+            <ChevronRight className="size-4" />
+          </Link>
+        </section>
+      ) : (
+        <Empty
+          title="No work is waiting for you"
+          text="When another team completes the previous step, your task will appear here automatically."
+        />
+      )}
+      {tasks.length > 1 && (
+        <section className="mt-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-navy-900">Other tasks</h2>
+            <Link className="text-sm font-bold text-brand" to="/queue">View all</Link>
+          </div>
+          <div className="grid gap-3">
+            {tasks.slice(1, 4).map((order) => (
+              <Link key={order.id} to={`/orders/${order.id}?stage=${myStage}`} className="surface flex min-h-16 items-center justify-between p-4">
+                <span><strong className="block">{order.orderNumber}</strong><span className="text-sm text-slate-500">{order.customer}</span></span>
+                <ChevronRight className="size-5 text-slate-400" />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </>
   );
 }
@@ -1178,12 +1243,16 @@ function NewOrderPage() {
 
 function OrderDetailPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { currentUser, orders, updateStage, reload } = useApp();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(
     orders.find((item) => item.id === id) ?? null,
   );
-  const [selected, setSelected] = useState<StageKey | null>(null);
+  const [selected, setSelected] = useState<StageKey | null>(() => {
+    const stage = searchParams.get("stage");
+    return stage && stage in stageInfo ? (stage as StageKey) : null;
+  });
   const [pending, setPending] = useState<{
     action: string;
     title: string;
@@ -1458,7 +1527,7 @@ function OrderDetailPage() {
           <aside className="h-full w-full max-w-lg overflow-y-auto bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between">
               <div>
-                <p className="eyebrow">Workflow action</p>
+                <p className="eyebrow">Your task</p>
                 <h2 className="mt-1 text-2xl font-bold text-navy-900">
                   {stageInfo[selected].label}
                 </h2>
@@ -1523,13 +1592,13 @@ function OrderDetailPage() {
                       className="secondary-button w-full"
                       onClick={progress}
                     >
-                      Save progress
+                      Save completed quantity
                     </button>
                     <button
                       className="primary-button w-full"
                       onClick={() => ask("complete")}
                     >
-                      Mark work completed
+                      Finish my work
                     </button>
                     <button
                       className="secondary-button w-full !border-red-200 !text-red-700"
@@ -1616,7 +1685,7 @@ function StageFields({
         </>
       )}
       <DynamicFields stage={stage} />
-      <label className="label mt-4">Note / issue explanation</label>
+      <label className="label mt-4">Note for the next team (optional)</label>
       <textarea
         className="field min-h-24 py-3"
         value={note}
