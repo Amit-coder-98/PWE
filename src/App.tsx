@@ -987,7 +987,7 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
         </div> : <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900">Showing {source.length} order{source.length === 1 ? "" : "s"} for {roleLabels[operatingRole(currentUser!.role)]}.</p>}
       </section>
       <section className="surface overflow-hidden">
-        <div className="hidden grid-cols-[170px_minmax(260px,1.7fr)_minmax(240px,1.2fr)_130px_80px] gap-5 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
+        <div className="hidden grid-cols-[170px_minmax(260px,1.7fr)_minmax(240px,1.2fr)_130px_80px] gap-5 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 xl:grid">
           <span>Order</span><span>Customer & bag</span><span>Current work</span><span>Due date</span><span>Action</span>
         </div>
         {result.map((order) => (
@@ -1017,52 +1017,94 @@ function OrderListRow({ order, assignedStage }: { order: Order; assignedStage?: 
   return (
     <Link
       to={`/orders/${order.id}${assignedStage ? `?stage=${assignedStage}` : ""}`}
-      className="group relative grid min-h-24 gap-4 border-b-2 border-slate-100 px-5 py-4 pr-12 transition hover:bg-sky-50 focus:bg-sky-50 md:grid-cols-[170px_minmax(260px,1.7fr)_minmax(240px,1.2fr)_130px_80px] md:items-center md:gap-5 md:pr-5"
+      className="group block border-b-2 border-slate-100 px-4 py-4 transition hover:bg-sky-50 focus:bg-sky-50 xl:grid xl:min-h-24 xl:grid-cols-[170px_minmax(260px,1.7fr)_minmax(240px,1.2fr)_130px_80px] xl:items-center xl:gap-5 xl:px-5"
     >
-      <div>
-        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 md:hidden">Order</span>
-        <p className="font-extrabold text-brand">{order.orderNumber}</p>
-        {order.priority !== "normal" && (
-          <span className="mt-1 inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-xs font-bold capitalize text-orange-700">
-            {order.priority} priority
+      <div className="xl:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-extrabold text-brand">{order.orderNumber}</p>
+            {order.priority !== "normal" && (
+              <span className="mt-1 inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-xs font-bold capitalize text-orange-700">
+                {order.priority} priority
+              </span>
+            )}
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Due</p>
+            <p className="mt-0.5 text-sm font-semibold text-slate-700">{date(order.expectedDelivery)}</p>
+          </div>
+        </div>
+        <div className="mt-3 min-w-0">
+          <p className="truncate font-bold text-navy-900">{order.customer}</p>
+          <p className="mt-0.5 truncate text-sm text-slate-600">
+            {order.product} · {order.quantity.toLocaleString("en-IN")} bags
+          </p>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Current work</p>
+            {displayedStages.length ? (
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className="text-sm font-bold text-navy-900">{activeLabel}</span>
+                {displayedStages.map((stage) => (
+                  <span
+                    className={`rounded-md border px-2 py-1 text-xs font-bold ${order.stages[stage].status === "in_progress" ? "border-orange-200 bg-orange-50 text-orange-800" : order.stages[stage].status === "blocked" || order.stages[stage].status === "issue" ? "border-red-200 bg-red-50 text-red-700" : "border-sky-200 bg-sky-50 text-sky-800"}`}
+                    key={stage}
+                  >
+                    {stageInfo[stage].short}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-slate-500">No work is waiting</p>
+            )}
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1 text-sm font-bold text-brand">
+            Open <ChevronRight className="size-4 transition group-hover:translate-x-0.5" />
           </span>
-        )}
+        </div>
       </div>
-      <div className="min-w-0 md:border-l md:border-slate-100 md:pl-5">
-        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 md:hidden">Customer & bag</span>
-        <p className="truncate font-bold text-navy-900">{order.customer}</p>
-        <p className="mt-1 truncate text-sm text-slate-600">
-          {order.product} · {order.quantity.toLocaleString("en-IN")} bags
-        </p>
+      <div className="hidden xl:contents">
+        <div>
+          <p className="font-extrabold text-brand">{order.orderNumber}</p>
+          {order.priority !== "normal" && (
+            <span className="mt-1 inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-xs font-bold capitalize text-orange-700">
+              {order.priority} priority
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 border-l border-slate-100 pl-5">
+          <p className="truncate font-bold text-navy-900">{order.customer}</p>
+          <p className="mt-1 truncate text-sm text-slate-600">
+            {order.product} · {order.quantity.toLocaleString("en-IN")} bags
+          </p>
+        </div>
+        <div className="border-l border-slate-100 pl-5">
+          {displayedStages.length ? (
+            <>
+              <p className="text-sm font-bold text-navy-900">{activeLabel}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {displayedStages.map((stage) => (
+                  <span
+                    className={`rounded-md border px-2 py-1 text-xs font-bold ${order.stages[stage].status === "in_progress" ? "border-orange-200 bg-orange-50 text-orange-800" : order.stages[stage].status === "blocked" || order.stages[stage].status === "issue" ? "border-red-200 bg-red-50 text-red-700" : "border-sky-200 bg-sky-50 text-sky-800"}`}
+                    key={stage}
+                  >
+                    {stageInfo[stage].short}
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">No work is waiting</p>
+          )}
+        </div>
+        <div className="border-l border-slate-100 pl-5">
+          <p className="text-sm font-semibold text-slate-700">{date(order.expectedDelivery)}</p>
+        </div>
+        <span className="flex items-center gap-1 text-sm font-bold text-brand">
+          Open <ChevronRight className="size-4 transition group-hover:translate-x-0.5" />
+        </span>
       </div>
-      <div className="md:border-l md:border-slate-100 md:pl-5">
-        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 md:hidden">Current work</span>
-        {displayedStages.length ? (
-          <>
-            <p className="text-sm font-bold text-navy-900">{activeLabel}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {displayedStages.map((stage) => (
-                <span
-                  className={`rounded-md border px-2 py-1 text-xs font-bold ${order.stages[stage].status === "in_progress" ? "border-orange-200 bg-orange-50 text-orange-800" : order.stages[stage].status === "blocked" || order.stages[stage].status === "issue" ? "border-red-200 bg-red-50 text-red-700" : "border-sky-200 bg-sky-50 text-sky-800"}`}
-                  key={stage}
-                >
-                  {stageInfo[stage].short}
-                </span>
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-slate-500">No work is waiting</p>
-        )}
-      </div>
-      <div className="md:border-l md:border-slate-100 md:pl-5">
-        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 md:hidden">Due date</span>
-        <p className="text-sm font-semibold text-slate-700">{date(order.expectedDelivery)}</p>
-      </div>
-      <span className="hidden items-center gap-1 text-sm font-bold text-brand md:flex">
-        Open <ChevronRight className="size-4 transition group-hover:translate-x-0.5" />
-      </span>
-      <ChevronRight className="absolute right-4 top-5 size-5 text-brand md:hidden" aria-hidden="true" />
     </Link>
   );
 }

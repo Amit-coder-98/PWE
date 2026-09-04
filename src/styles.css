@@ -36,6 +36,13 @@ select.field { appearance: none; padding-right: 3rem; background-image: url("dat
 .page-title { @apply text-2xl font-bold tracking-tight text-navy-900 md:text-3xl; }
 .status-dot { @apply size-2 rounded-full bg-current; }
 
+@media (max-width: 479px) {
+  .surface { border-radius: 1rem; }
+  .page-title { font-size: 1.75rem; line-height: 1.15; }
+  .primary-button, .secondary-button { padding-inline: .875rem; }
+  .field { padding-inline: .875rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
