@@ -917,15 +917,15 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
   const { orders, currentUser } = useApp();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
-  const [stage, setStage] = useState(() => {
+  const [stage, setStage] = useState<StageKey | "all">(() => {
     const value = searchParams.get("stage");
-    return value && value in stageInfo ? value : "all";
+    return value && value in stageInfo ? (value as StageKey) : "all";
   });
-  const relevant =
-    currentUser &&
-    (Object.entries(stageInfo).find(
+  const relevant = currentUser
+    ? (Object.entries(stageInfo).find(
       ([, info]) => info.role === operatingRole(currentUser.role),
-    )?.[0] as StageKey | undefined);
+    )?.[0] as StageKey | undefined)
+    : undefined;
   const isAdmin = currentUser?.role === "admin";
   const canBookOrders = ["admin", "marketing"].includes(
     currentUser?.role ?? "",
