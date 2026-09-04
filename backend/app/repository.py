@@ -132,6 +132,15 @@ class MongoRepository:
         fields["updatedAt"] = now()
         return clean(self.db.users.find_one_and_update({"id": user_id}, {"$set": fields}, projection={"passwordHash": 0, "_id": 0}, return_document=ReturnDocument.AFTER))
 
+    def delete_user(self, user_id: str) -> bool:
+        """Permanently remove an account after its sessions have been revoked.
+
+        Audit events deliberately remain untouched: they store the actor name and
+        role at the time of the business action, so production history stays
+        understandable after an unused account is removed.
+        """
+        return self.db.users.delete_one({"id": user_id}).deleted_count == 1
+
     def register_failed_login(self, user_id: str) -> None:
         self.db.users.update_one({"id": user_id}, {"$inc": {"failedLoginCount": 1}, "$set": {"lastFailedLoginAt": now()}})
 

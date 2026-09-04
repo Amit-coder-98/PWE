@@ -8,7 +8,9 @@ from pwdlib import PasswordHash
 
 from app.config import Settings
 from app.main import create_app
+from app.models import Role, StageKey
 from app.repository import MongoRepository
+from app.workflow import assert_permission
 
 
 class FakeStorage:
@@ -90,7 +92,30 @@ def test_customer_order_and_parallel_workflow(system):
     order = create_order(client, headers)
     assert order["stages"]["material"]["status"] == "ready"
     assert order["stages"]["design"]["status"] == "ready"
+    assert order["stages"]["cutting"]["status"] == "ready"
+    assert order["stages"]["plate"]["status"] == "ready"
     assert order["stages"]["printing"]["status"] == "waiting"
+
+
+@pytest.mark.parametrize(
+    ("role", "stage"),
+    [
+        (Role.CUTTING_MASTER, StageKey.MATERIAL),
+        (Role.CUTTING_MASTER, StageKey.CUTTING),
+        (Role.DESIGNER, StageKey.DESIGN),
+        (Role.TRANSPORT_MANAGER, StageKey.PLATE),
+        (Role.PRINTING_OPERATOR, StageKey.PRINTING),
+        (Role.MANAGER, StageKey.STITCHING),
+        (Role.MANAGER, StageKey.PACKING),
+        (Role.MANAGER, StageKey.DC),
+        (Role.ACCOUNTANT, StageKey.BILLING),
+        (Role.ACCOUNTANT, StageKey.PAYMENT),
+        (Role.TRANSPORT_MANAGER, StageKey.DISPATCH),
+        (Role.MARKETING, StageKey.DELIVERY),
+    ],
+)
+def test_each_factory_role_only_owns_its_assigned_stage(role, stage):
+    assert_permission(role, stage)
 
 
 def test_csrf_and_role_protection(system):
@@ -110,6 +135,31 @@ def test_csrf_and_role_protection(system):
     assert visible_order.status_code == 200
     assert visible_order.json()["amount"] == 0
     assert visible_order.json()["phone"] == ""
+
+
+def test_marketing_can_book_orders_and_admin_can_delete_unused_users(system):
+    client, repository = system
+    headers = login(client)
+    add_staff(repository, "marketing", "marketing", "marketing@test.example.com")
+    add_staff(repository, "unused", "plate_operator", "unused@test.example.com")
+
+    deleted = client.delete("/api/users/unused", headers=headers)
+    assert deleted.status_code == 200, deleted.text
+    assert repository.get_user("unused") is None
+    assert client.delete("/api/users/admin", headers=headers).status_code == 422
+
+    client.post("/api/auth/logout", headers=headers)
+    marketing_headers = login(client, "marketing@test.example.com")
+    customer = client.post("/api/customers", headers=marketing_headers, json={
+        "companyName": "Marketing Customer", "contactPerson": "Meera Shah", "phone": "9876500000",
+        "address": "Nashik, Maharashtra",
+    })
+    assert customer.status_code == 200, customer.text
+    order = client.post("/api/orders", headers=marketing_headers, json={
+        "customerId": customer.json()["id"], "product": "Printed PP bag", "quantity": 100,
+        "amount": 25000, "expectedDelivery": "2026-09-30", "priority": "normal",
+    })
+    assert order.status_code == 200, order.text
 
 
 def test_no_image_completes_design_but_plate_remains(system):

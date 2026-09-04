@@ -1,4 +1,4 @@
-export const roles = ['admin', 'order_manager', 'inventory_manager', 'designer', 'cutting_manager', 'plate_operator', 'printing_operator', 'stitching_manager', 'packing_manager', 'accountant', 'dispatch_manager'] as const
+export const roles = ['admin', 'cutting_master', 'designer', 'transport_manager', 'printing_operator', 'manager', 'accountant', 'marketing', 'order_manager', 'inventory_manager', 'cutting_manager', 'plate_operator', 'stitching_manager', 'packing_manager', 'dispatch_manager'] as const
 export type Role = typeof roles[number]
 export const stageKeys = ['order', 'material', 'design', 'cutting', 'plate', 'printing', 'stitching', 'packing', 'dc', 'billing', 'payment', 'dispatch', 'delivery', 'return', 'refund'] as const
 export type StageKey = typeof stageKeys[number]

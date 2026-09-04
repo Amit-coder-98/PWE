@@ -7,15 +7,22 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 class Role(str, Enum):
     ADMIN = "admin"
+    CUTTING_MASTER = "cutting_master"
+    DESIGNER = "designer"
+    TRANSPORT_MANAGER = "transport_manager"
+    PRINTING_OPERATOR = "printing_operator"
+    MANAGER = "manager"
+    ACCOUNTANT = "accountant"
+    MARKETING = "marketing"
+
+    # Legacy roles remain readable while existing practical-test accounts are
+    # reassigned by the Super Admin to the consolidated factory roles.
     ORDER_MANAGER = "order_manager"
     INVENTORY_MANAGER = "inventory_manager"
-    DESIGNER = "designer"
     CUTTING_MANAGER = "cutting_manager"
     PLATE_OPERATOR = "plate_operator"
-    PRINTING_OPERATOR = "printing_operator"
     STITCHING_MANAGER = "stitching_manager"
     PACKING_MANAGER = "packing_manager"
-    ACCOUNTANT = "accountant"
     DISPATCH_MANAGER = "dispatch_manager"
 
 

@@ -28,10 +28,17 @@ import {
   LockKeyhole,
   LogOut,
   Menu,
+  Megaphone,
+  PackageCheck,
+  Palette,
   Plus,
+  Printer,
   RefreshCw,
+  ReceiptText,
   Search,
+  Scissors,
   ShieldCheck,
+  Truck,
   Upload,
   Users,
   X,
@@ -39,11 +46,11 @@ import {
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { StatusBadge } from "./components/StatusBadge";
 import { ToastHost } from "./components/ToastHost";
-import { WorkflowMap } from "./components/WorkflowMap";
 import { api, ApiError } from "./lib/api";
 import {
   canManageStage,
   nextInstruction,
+  operatingRole,
   productionStages,
   stageInfo,
 } from "./lib/workflow";
@@ -59,38 +66,95 @@ import type {
 
 const roleLabels: Record<Role, string> = {
   admin: "Super Admin",
-  order_manager: "Order / CRM Manager",
-  inventory_manager: "Material Manager",
+  cutting_master: "Cutting Master",
   designer: "Designer",
-  cutting_manager: "Cutting Manager",
-  plate_operator: "Plate Operator",
+  transport_manager: "Transport Manager",
   printing_operator: "Printing Operator",
-  stitching_manager: "Stitching Manager",
-  packing_manager: "Packing & D.C. Manager",
+  manager: "Manager",
   accountant: "Accountant",
-  dispatch_manager: "Dispatch & Delivery Manager",
+  marketing: "Marketing",
+  order_manager: "Legacy Order Manager",
+  inventory_manager: "Legacy Material Manager",
+  cutting_manager: "Legacy Cutting Manager",
+  plate_operator: "Legacy Plate Operator",
+  stitching_manager: "Legacy Stitching Manager",
+  packing_manager: "Legacy Packing Manager",
+  dispatch_manager: "Legacy Dispatch Manager",
 };
 const departmentFor: Record<Role, string> = {
   admin: "Administration",
-  order_manager: "Order & CRM",
-  inventory_manager: "Material & Inventory",
+  cutting_master: "Cutting & Material",
   designer: "Design",
-  cutting_manager: "Cutting",
-  plate_operator: "Plate / Prepress",
+  transport_manager: "Transport & Plate",
   printing_operator: "Printing",
-  stitching_manager: "Stitching",
-  packing_manager: "Packing & D.C.",
+  manager: "Stitching, Packing & D.C.",
   accountant: "Accounts",
-  dispatch_manager: "Dispatch & Delivery",
+  marketing: "Marketing & Delivery",
+  order_manager: "Legacy Order & CRM",
+  inventory_manager: "Legacy Material & Inventory",
+  cutting_manager: "Legacy Cutting",
+  plate_operator: "Legacy Plate / Prepress",
+  stitching_manager: "Legacy Stitching",
+  packing_manager: "Legacy Packing & D.C.",
+  dispatch_manager: "Legacy Dispatch & Delivery",
+};
+const factoryRoles: Role[] = [
+  "cutting_master",
+  "designer",
+  "transport_manager",
+  "printing_operator",
+  "manager",
+  "accountant",
+  "marketing",
+];
+const roleVisuals: Record<Role, { icon: typeof Users; color: string; soft: string }> = {
+  admin: { icon: ShieldCheck, color: "text-violet-700", soft: "bg-violet-100" },
+  cutting_master: { icon: Scissors, color: "text-orange-700", soft: "bg-orange-100" },
+  designer: { icon: Palette, color: "text-fuchsia-700", soft: "bg-fuchsia-100" },
+  transport_manager: { icon: Truck, color: "text-cyan-700", soft: "bg-cyan-100" },
+  printing_operator: { icon: Printer, color: "text-blue-700", soft: "bg-blue-100" },
+  manager: { icon: PackageCheck, color: "text-emerald-700", soft: "bg-emerald-100" },
+  accountant: { icon: ReceiptText, color: "text-amber-700", soft: "bg-amber-100" },
+  marketing: { icon: Megaphone, color: "text-rose-700", soft: "bg-rose-100" },
+  order_manager: { icon: ClipboardList, color: "text-slate-700", soft: "bg-slate-100" },
+  inventory_manager: { icon: Factory, color: "text-slate-700", soft: "bg-slate-100" },
+  cutting_manager: { icon: Scissors, color: "text-slate-700", soft: "bg-slate-100" },
+  plate_operator: { icon: Clipboard, color: "text-slate-700", soft: "bg-slate-100" },
+  stitching_manager: { icon: PackageCheck, color: "text-slate-700", soft: "bg-slate-100" },
+  packing_manager: { icon: PackageCheck, color: "text-slate-700", soft: "bg-slate-100" },
+  dispatch_manager: { icon: Truck, color: "text-slate-700", soft: "bg-slate-100" },
+};
+const roleResponsibilities: Record<Role, string> = {
+  admin: "All orders and team administration",
+  cutting_master: "Material availability and cutting",
+  designer: "Design creation and customer approval",
+  transport_manager: "Plate preparation and dispatch",
+  printing_operator: "Printing and quality check",
+  manager: "Stitching, packing and delivery challan",
+  accountant: "Billing and payment recording",
+  marketing: "Customers, new orders and delivery confirmation",
+  order_manager: "Legacy order and CRM work",
+  inventory_manager: "Legacy material work",
+  cutting_manager: "Legacy cutting work",
+  plate_operator: "Legacy plate work",
+  stitching_manager: "Legacy stitching work",
+  packing_manager: "Legacy packing work",
+  dispatch_manager: "Legacy dispatch work",
 };
 const canViewPrices = (role?: Role) =>
-  !!role && ["admin", "order_manager", "accountant"].includes(role);
+  !!role && ["admin", "accountant"].includes(role);
 const money = (amount: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(amount);
+const activeOrderStages = (order: Order) =>
+  productionStages.filter((stage) =>
+    ["ready", "in_progress", "blocked", "issue"].includes(
+      order.stages[stage].status,
+    ),
+  );
 const date = (value?: string) =>
   value
     ? new Intl.DateTimeFormat("en-IN", {
@@ -246,11 +310,11 @@ function Brand({ light = false }: { light?: boolean }) {
   return (
     <div className="inline-flex items-center gap-3">
       <span className="grid size-12 place-items-center rounded-xl bg-brand font-black text-white">
-        PB
+        PWE
       </span>
       <span>
         <strong className={`block ${light ? "text-white" : "text-navy-900"}`}>
-          Prabodhan Bag
+          Prabodhan WE Bag
         </strong>
         <small className={light ? "text-slate-300" : "text-slate-500"}>
           Production Operations
@@ -355,12 +419,12 @@ function Shell({ children }: { children: ReactNode }) {
     localStorage.getItem("pb-language") === "mr" ? "mr" : "en",
   );
   if (!currentUser) return null;
-  const isSimpleWorker = !["admin", "order_manager"].includes(currentUser.role);
+  const isSimpleWorker = !["admin", "marketing"].includes(currentUser.role);
   const canViewCustomers = [
     "admin",
-    "order_manager",
     "accountant",
-    "dispatch_manager",
+    "transport_manager",
+    "marketing",
   ].includes(currentUser.role);
   const visibleNav = isSimpleWorker
     ? nav.filter((item) => ["/queue", "/orders", "/more"].includes(item.to))
@@ -412,7 +476,7 @@ function Shell({ children }: { children: ReactNode }) {
             <div className="min-w-0">
               <p className="truncate text-sm font-bold">{currentUser.name}</p>
               <p className="truncate text-xs text-slate-400">
-                {roleLabels[currentUser.role]}
+                {roleLabels[operatingRole(currentUser.role)]}
               </p>
             </div>
           </div>
@@ -601,10 +665,10 @@ function Empty({
 function DashboardPage() {
   const { currentUser, orders } = useApp();
   if (!currentUser) return null;
-  if (!["admin", "order_manager"].includes(currentUser.role))
+  if (currentUser.role !== "admin")
     return <WorkerHome />;
   const relevant = Object.entries(stageInfo).find(
-    ([, info]) => info.role === currentUser.role,
+    ([, info]) => info.role === operatingRole(currentUser.role),
   )?.[0] as StageKey | undefined;
   const myQueue =
     currentUser.role === "admin"
@@ -621,6 +685,9 @@ function DashboardPage() {
       ["blocked", "issue"].includes(state.status),
     ),
   ).length;
+  const liveDepartments = productionStages.filter((stage) =>
+    orders.some((order) => activeOrderStages(order).includes(stage)),
+  );
   return (
     <>
       <Heading
@@ -632,8 +699,7 @@ function DashboardPage() {
         }
         description="Urgent work appears first. Open an order to see exactly what happened and what should happen next."
         action={
-          currentUser.role === "admin" ||
-          currentUser.role === "order_manager" ? (
+          currentUser.role === "admin" ? (
             <Link className="primary-button" to="/orders/new">
               <Plus className="size-4" />
               Create order
@@ -650,6 +716,37 @@ function DashboardPage() {
         <Kpi label="Need attention" value={issues} danger={issues > 0} />
         <Kpi label="My queue" value={myQueue.length} />
       </div>
+      {currentUser.role === "admin" && (
+        <section className="surface mt-5 p-4">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">Live work by department</h2>
+              <p className="text-sm text-slate-500">Open a department to see the orders waiting there.</p>
+            </div>
+            <Link className="text-sm font-bold text-brand" to="/orders">All orders</Link>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {liveDepartments.map((stage) => {
+              const count = orders.filter((order) => activeOrderStages(order).includes(stage)).length;
+              const visual = roleVisuals[stageInfo[stage].role];
+              const DepartmentIcon = visual.icon;
+              return (
+                <Link key={stage} to={`/orders?stage=${stage}`} className="rounded-xl border border-slate-200 p-3 transition hover:border-sky-400 hover:bg-sky-50">
+                  <div className="flex items-center gap-2">
+                    <span className={`grid size-8 place-items-center rounded-lg ${visual.soft} ${visual.color}`}>
+                      <DepartmentIcon className="size-4" aria-hidden="true" />
+                    </span>
+                    <p className="text-sm font-bold text-navy-900">{stageInfo[stage].short}</p>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-500">{roleLabels[stageInfo[stage].role]}</p>
+                  <p className="mt-2 text-xl font-extrabold text-brand">{count}</p>
+                </Link>
+              );
+            })}
+            {!liveDepartments.length && <p className="col-span-full rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No active orders yet.</p>}
+          </div>
+        </section>
+      )}
       <section className="mt-5">
         <div className="mb-3 flex items-end justify-between">
           <div>
@@ -680,8 +777,7 @@ function DashboardPage() {
               }
               action={
                 !orders.length &&
-                (currentUser.role === "admin" ||
-                  currentUser.role === "order_manager") ? (
+                currentUser.role === "admin" ? (
                   <Link className="primary-button" to="/customers">
                     <Plus className="size-4" />
                     Create first customer
@@ -700,7 +796,7 @@ function WorkerHome() {
   const { currentUser, orders } = useApp();
   if (!currentUser) return null;
   const myStage = Object.entries(stageInfo).find(
-    ([, info]) => info.role === currentUser.role,
+    ([, info]) => info.role === operatingRole(currentUser.role),
   )?.[0] as StageKey | undefined;
   const tasks = myStage
     ? orders.filter((order) =>
@@ -776,46 +872,87 @@ function Kpi({
   );
 }
 
+function SearchField({
+  id,
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="search-control">
+      <label className="sr-only" htmlFor={id}>
+        {label}
+      </label>
+      <Search aria-hidden="true" />
+      <input
+        id={id}
+        className="field pr-12"
+        type="search"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {value && (
+        <button
+          type="button"
+          className="search-clear"
+          onClick={() => onChange("")}
+          aria-label={`Clear ${label.toLowerCase()}`}
+        >
+          <X className="size-5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function OrdersPage({ queue = false }: { queue?: boolean }) {
   const { orders, currentUser } = useApp();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
-  const [stage, setStage] = useState("all");
+  const [stage, setStage] = useState(() => {
+    const value = searchParams.get("stage");
+    return value && value in stageInfo ? value : "all";
+  });
   const relevant =
     currentUser &&
     (Object.entries(stageInfo).find(
-      ([, info]) => info.role === currentUser.role,
+      ([, info]) => info.role === operatingRole(currentUser.role),
     )?.[0] as StageKey | undefined);
-  const source =
-    queue && currentUser?.role !== "admin"
-      ? orders.filter(
-          (order) =>
-            relevant &&
-            ["ready", "in_progress", "blocked", "issue"].includes(
-              order.stages[relevant].status,
-            ),
-        )
-      : orders;
+  const isAdmin = currentUser?.role === "admin";
+  const canBookOrders = ["admin", "marketing"].includes(
+    currentUser?.role ?? "",
+  );
+  const source = !isAdmin
+    ? orders.filter((order) => relevant && activeOrderStages(order).includes(relevant))
+    : orders;
   const result = source.filter(
     (order) =>
       `${order.orderNumber} ${order.customer} ${order.product} ${order.phone}`
         .toLowerCase()
         .includes(search.toLowerCase()) &&
-      (stage === "all" || order.currentStage === stage),
+      (stage === "all" || activeOrderStages(order).includes(stage)),
   );
   return (
     <>
       <Heading
-        eyebrow={queue ? "Focused work" : "Order register"}
-        title={queue ? "My work queue" : "Orders"}
+        eyebrow={isAdmin ? "Order register" : "My work"}
+        title={isAdmin ? "Orders" : `${roleLabels[operatingRole(currentUser!.role)]} work`}
         description={
-          queue
-            ? "Only work assigned to your department appears here."
-            : "Search real orders and open one to understand its complete production story."
+          isAdmin
+            ? "Search by customer name and see which department is working on every order."
+            : "Only orders waiting for your department are shown here."
         }
         action={
           !queue &&
-          (currentUser?.role === "admin" ||
-            currentUser?.role === "order_manager") ? (
+          canBookOrders ? (
             <Link className="primary-button" to="/orders/new">
               <Plus className="size-4" />
               New order
@@ -823,34 +960,38 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
           ) : undefined
         }
       />
-      <section className="surface mb-4 grid gap-3 p-3 sm:grid-cols-[1fr_220px]">
-        <label className="relative">
-          <span className="sr-only">Search</span>
-          <Search className="absolute left-3.5 top-3.5 size-5 text-slate-400" />
-          <input
-            className="field pl-11"
-            placeholder="Order, customer, product or phone…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        <select
-          className="field"
-          value={stage}
-          onChange={(event) => setStage(event.target.value)}
-          aria-label="Filter stage"
-        >
-          <option value="all">All stages</option>
-          {productionStages.map((key) => (
-            <option value={key} key={key}>
-              {stageInfo[key].short}
-            </option>
-          ))}
-        </select>
+      <section className="surface mb-4 p-3">
+        <SearchField
+          id="order-search"
+          label="Search orders"
+          placeholder={isAdmin ? "Search order number, customer name, product or phone…" : "Search your order by customer or order number…"}
+          value={search}
+          onChange={setSearch}
+        />
+        {isAdmin ? <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="Filter orders by current department">
+          <button className={`min-h-11 shrink-0 rounded-lg px-3 text-sm font-bold ${stage === "all" ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-700"}`} onClick={() => setStage("all")}>
+            All ({source.length})
+          </button>
+          {productionStages.map((key) => {
+            const count = source.filter((order) => activeOrderStages(order).includes(key)).length;
+            return (
+              <button
+                className={`min-h-11 shrink-0 rounded-lg px-3 text-sm font-bold ${stage === key ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-700"}`}
+                key={key}
+                onClick={() => setStage(key)}
+              >
+                {stageInfo[key].short} ({count})
+              </button>
+            );
+          })}
+        </div> : <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900">Showing {source.length} order{source.length === 1 ? "" : "s"} for {roleLabels[operatingRole(currentUser!.role)]}.</p>}
       </section>
-      <div className="grid gap-3 xl:grid-cols-2">
+      <section className="surface overflow-hidden">
+        <div className="hidden grid-cols-[170px_minmax(260px,1.7fr)_minmax(240px,1.2fr)_130px_80px] gap-5 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
+          <span>Order</span><span>Customer & bag</span><span>Current work</span><span>Due date</span><span>Action</span>
+        </div>
         {result.map((order) => (
-          <OrderCard key={order.id} order={order} />
+          <OrderListRow key={order.id} order={order} assignedStage={isAdmin ? undefined : relevant} />
         ))}
         {result.length === 0 && (
           <Empty
@@ -862,8 +1003,67 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
             }
           />
         )}
-      </div>
+      </section>
     </>
+  );
+}
+
+function OrderListRow({ order, assignedStage }: { order: Order; assignedStage?: StageKey }) {
+  const liveStages = activeOrderStages(order);
+  const displayedStages = assignedStage ? liveStages.filter((stage) => stage === assignedStage) : liveStages;
+  const activeLabel = displayedStages.length === 1
+    ? `${stageInfo[displayedStages[0]].short} is ready`
+    : `${displayedStages.length} tasks are ready`;
+  return (
+    <Link
+      to={`/orders/${order.id}${assignedStage ? `?stage=${assignedStage}` : ""}`}
+      className="group relative grid min-h-24 gap-4 border-b-2 border-slate-100 px-5 py-4 pr-12 transition hover:bg-sky-50 focus:bg-sky-50 md:grid-cols-[170px_minmax(260px,1.7fr)_minmax(240px,1.2fr)_130px_80px] md:items-center md:gap-5 md:pr-5"
+    >
+      <div>
+        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 md:hidden">Order</span>
+        <p className="font-extrabold text-brand">{order.orderNumber}</p>
+        {order.priority !== "normal" && (
+          <span className="mt-1 inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-xs font-bold capitalize text-orange-700">
+            {order.priority} priority
+          </span>
+        )}
+      </div>
+      <div className="min-w-0 md:border-l md:border-slate-100 md:pl-5">
+        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 md:hidden">Customer & bag</span>
+        <p className="truncate font-bold text-navy-900">{order.customer}</p>
+        <p className="mt-1 truncate text-sm text-slate-600">
+          {order.product} · {order.quantity.toLocaleString("en-IN")} bags
+        </p>
+      </div>
+      <div className="md:border-l md:border-slate-100 md:pl-5">
+        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 md:hidden">Current work</span>
+        {displayedStages.length ? (
+          <>
+            <p className="text-sm font-bold text-navy-900">{activeLabel}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {displayedStages.map((stage) => (
+                <span
+                  className={`rounded-md border px-2 py-1 text-xs font-bold ${order.stages[stage].status === "in_progress" ? "border-orange-200 bg-orange-50 text-orange-800" : order.stages[stage].status === "blocked" || order.stages[stage].status === "issue" ? "border-red-200 bg-red-50 text-red-700" : "border-sky-200 bg-sky-50 text-sky-800"}`}
+                  key={stage}
+                >
+                  {stageInfo[stage].short}
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-slate-500">No work is waiting</p>
+        )}
+      </div>
+      <div className="md:border-l md:border-slate-100 md:pl-5">
+        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 md:hidden">Due date</span>
+        <p className="text-sm font-semibold text-slate-700">{date(order.expectedDelivery)}</p>
+      </div>
+      <span className="hidden items-center gap-1 text-sm font-bold text-brand md:flex">
+        Open <ChevronRight className="size-4 transition group-hover:translate-x-0.5" />
+      </span>
+      <ChevronRight className="absolute right-4 top-5 size-5 text-brand md:hidden" aria-hidden="true" />
+    </Link>
   );
 }
 function OrderCard({ order }: { order: Order }) {
@@ -925,8 +1125,7 @@ function CustomersPage() {
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const permitted =
-    currentUser?.role === "admin" || currentUser?.role === "order_manager";
+  const permitted = ["admin", "marketing"].includes(currentUser?.role ?? "");
   const filtered = customers.filter((c) =>
     `${c.companyName} ${c.contactPerson} ${c.phone}`
       .toLowerCase()
@@ -981,15 +1180,15 @@ function CustomersPage() {
           ) : undefined
         }
       />
-      <label className="relative mb-4 block">
-        <Search className="absolute left-3.5 top-3.5 size-5 text-slate-400" />
-        <input
-          className="field pl-11"
-          placeholder="Search customer or phone…"
+      <div className="mb-4">
+        <SearchField
+          id="customer-list-search"
+          label="Search customers"
+          placeholder="Search customer name, contact person, or phone…"
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={setSearch}
         />
-      </label>
+      </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((customer) => (
           <article className="surface p-4" key={customer.id}>
@@ -1106,6 +1305,23 @@ function NewOrderPage() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null,
+  );
+  const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
+  const matchingCustomers = customers
+    .filter((customer) => {
+      const query = customerQuery.trim().toLocaleLowerCase();
+      if (!query) return true;
+      return [
+        customer.companyName,
+        customer.contactPerson,
+        customer.phone,
+        customer.email ?? "",
+      ].some((value) => value.toLocaleLowerCase().includes(query));
+    })
+    .slice(0, 8);
   if (!customers.length)
     return (
       <>
@@ -1127,12 +1343,19 @@ function NewOrderPage() {
     );
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setBusy(true);
     setError("");
+    if (!selectedCustomer) {
+      setError(
+        "Please search for and select a customer before creating the order.",
+      );
+      setCustomerMenuOpen(true);
+      return;
+    }
+    setBusy(true);
     const form = new FormData(event.currentTarget);
     try {
       const order = await createOrder({
-        customerId: String(form.get("customerId")),
+        customerId: selectedCustomer.id,
         product: String(form.get("product")),
         quantity: Number(form.get("quantity")),
         amount: Number(form.get("amount")),
@@ -1164,17 +1387,95 @@ function NewOrderPage() {
       <form className="surface mx-auto max-w-3xl p-5 md:p-7" onSubmit={submit}>
         <section>
           <h2 className="text-lg font-bold text-navy-900">1. Customer</h2>
-          <label className="label mt-4">Choose customer</label>
-          <select className="field" name="customerId" required defaultValue="">
-            <option value="" disabled>
-              Select a customer
-            </option>
-            {customers.map((customer) => (
-              <option value={customer.id} key={customer.id}>
-                {customer.companyName} — {customer.contactPerson}
-              </option>
-            ))}
-          </select>
+          <label className="label mt-4" htmlFor="customer-search">
+            Search and choose customer
+          </label>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-500"
+              aria-hidden="true"
+            />
+            <input
+              id="customer-search"
+              className="field pl-12 pr-12"
+              value={customerQuery}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-controls="customer-results"
+              aria-expanded={customerMenuOpen}
+              aria-describedby="customer-search-help"
+              autoComplete="off"
+              placeholder="Type company name, contact person, or phone number"
+              onChange={(event) => {
+                setCustomerQuery(event.target.value);
+                setSelectedCustomer(null);
+                setCustomerMenuOpen(true);
+              }}
+              onFocus={() => setCustomerMenuOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setCustomerMenuOpen(false);
+              }}
+            />
+            {selectedCustomer && (
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+                onClick={() => {
+                  setSelectedCustomer(null);
+                  setCustomerQuery("");
+                  setCustomerMenuOpen(true);
+                }}
+                aria-label="Clear selected customer"
+              >
+                <X className="size-5" />
+              </button>
+            )}
+            {customerMenuOpen && (
+              <div
+                id="customer-results"
+                role="listbox"
+                className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+              >
+                {matchingCustomers.length ? (
+                  matchingCustomers.map((customer) => (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={selectedCustomer?.id === customer.id}
+                      key={customer.id}
+                      className="flex min-h-12 w-full flex-col rounded-lg px-3 py-2 text-left hover:bg-sky-50 focus:bg-sky-50 focus:outline-none"
+                      onClick={() => {
+                        setSelectedCustomer(customer);
+                        setCustomerQuery(`${customer.companyName} — ${customer.contactPerson}`);
+                        setCustomerMenuOpen(false);
+                      }}
+                    >
+                      <span className="font-semibold text-navy-900">
+                        {customer.companyName}
+                      </span>
+                      <span className="text-sm text-slate-600">
+                        {customer.contactPerson} · {customer.phone}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-4 text-sm text-slate-600">
+                    No customer matches this search. Check the spelling or add
+                    the customer first.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <p id="customer-search-help" className="mt-2 text-sm text-slate-600">
+            Type a few letters, then select the correct customer from the list.
+          </p>
+          {selectedCustomer && (
+            <p className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+              <CheckCircle2 className="size-4" aria-hidden="true" />
+              Selected: {selectedCustomer.companyName}
+            </p>
+          )}
         </section>
         <section className="mt-7 border-t border-slate-200 pt-6">
           <h2 className="text-lg font-bold text-navy-900">
@@ -1278,6 +1579,9 @@ function OrderDetailPage() {
   if (!order || !currentUser) return <Navigate to="/orders" replace />;
   const state = selected ? order.stages[selected] : null;
   const manage = selected ? canManageStage(currentUser.role, selected) : false;
+  const currentRole = operatingRole(stageInfo[order.currentStage].role);
+  const currentVisual = roleVisuals[currentRole];
+  const CurrentRoleIcon = currentVisual.icon;
   const consequence = (stage: StageKey, action: string) => {
     const next: Partial<Record<StageKey, string>> = {
       material: "Cutting",
@@ -1305,6 +1609,20 @@ function OrderDetailPage() {
   };
   const ask = (action: string) => {
     if (!selected) return;
+    if (selected === "material" && action === "complete") {
+      const form = document.querySelector(`[data-stage-form="material"]`);
+      const required = Number((form?.querySelector('[name="requiredQuantity"]') as HTMLInputElement | null)?.value);
+      const available = Number((form?.querySelector('[name="availableQuantity"]') as HTMLInputElement | null)?.value);
+      if (required <= 0 || available < 0)
+        return toast("Enter the required and available material quantities first.", "error");
+      if (available < required)
+        return toast("Material is short. Use ‘Report an issue’ so Admin can arrange stock.", "error");
+    }
+    if (selected === "printing" && action === "complete") {
+      const qualityCheck = document.querySelector('[data-stage-form="printing"] [name="qualityChecked"]') as HTMLInputElement | null;
+      if (!qualityCheck?.checked)
+        return toast("Quality check is not passed. Report an issue before finishing printing.", "error");
+    }
     if (action === "block" && note.trim().length < 3)
       return toast("Explain the issue before reporting it.", "error");
     setPending({
@@ -1368,7 +1686,11 @@ function OrderDetailPage() {
       >(`[data-stage-form="${stage}"] [name]`)
       .forEach((element) => {
         result[element.name] =
-          element.type === "number" ? Number(element.value) : element.value;
+          element.type === "number"
+            ? Number(element.value)
+            : element.type === "checkbox"
+              ? (element as HTMLInputElement).checked
+              : element.value;
       });
     return result;
   };
@@ -1393,10 +1715,16 @@ function OrderDetailPage() {
                 {order.product} · {order.quantity.toLocaleString("en-IN")} bags
               </p>
             </div>
-            <div className="rounded-xl bg-white/10 p-3">
-              <p className="text-xs text-slate-300">Current responsibility</p>
-              <p className="font-bold">{stageInfo[order.currentStage].label}</p>
-              <StatusBadge status={order.stages[order.currentStage].status} />
+            <div className="flex min-w-52 items-start gap-3 rounded-xl bg-white/10 p-3">
+              <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${currentVisual.soft} ${currentVisual.color}`}>
+                <CurrentRoleIcon className="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-xs text-slate-300">Current responsibility</p>
+                <p className="font-bold">{stageInfo[order.currentStage].label}</p>
+                <p className="mt-0.5 text-xs text-slate-300">{roleLabels[currentRole]}</p>
+                <div className="mt-2"><StatusBadge status={order.stages[order.currentStage].status} /></div>
+              </div>
             </div>
           </div>
           <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/15 pt-5 md:grid-cols-4">
@@ -1414,9 +1742,12 @@ function OrderDetailPage() {
       </section>
       <section className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-5">
         <p className="eyebrow">What should happen next?</p>
-        <h2 className="mt-2 text-lg font-bold text-navy-900">
-          {nextInstruction(order)}
-        </h2>
+          <div className="mt-2 flex items-start gap-3">
+            <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${currentVisual.soft} ${currentVisual.color}`}>
+              <CurrentRoleIcon className="size-5" aria-hidden="true" />
+            </span>
+            <h2 className="pt-1.5 text-lg font-bold text-navy-900">{nextInstruction(order)}</h2>
+          </div>
         <button
           className="primary-button mt-4"
           onClick={() => {
@@ -1435,24 +1766,9 @@ function OrderDetailPage() {
       {currentUser.role === "designer" && (
         <DesignWorkspace order={order} setOrder={setOrder} reload={reload} />
       )}
-      <details className="surface mt-4">
-        <summary className="min-h-14 cursor-pointer px-5 py-4 font-bold text-navy-900">
-          View full order workflow and history
-        </summary>
-        <div className="border-t border-slate-200 p-4">
-          <WorkflowMap
-            order={order}
-            onSelect={(stage) => {
-              setSelected(stage);
-              setQuantity(order.stages[stage].completedQuantity ?? "");
-              setNote(order.stages[stage].note ?? "");
-            }}
-          />
-        </div>
-      </details>
       <section className="mt-4 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
         <div className="surface p-5">
-          <h2 className="font-bold text-navy-900">Customer and order</h2>
+          <h2 className="flex items-center gap-2 font-bold text-navy-900"><Building2 className="size-5 text-sky-700" aria-hidden="true" />Customer and order</h2>
           <dl className="mt-3">
             <Detail label="Contact" value={order.contactPerson} />
             {order.phone && <Detail label="Phone" value={order.phone} />}
@@ -1461,7 +1777,7 @@ function OrderDetailPage() {
           </dl>
         </div>
         <div className="surface p-5">
-          <h2 className="font-bold text-navy-900">Activity history</h2>
+          <h2 className="flex items-center gap-2 font-bold text-navy-900"><ClipboardList className="size-5 text-sky-700" aria-hidden="true" />Activity history</h2>
           <p className="text-sm text-slate-500">Who changed what and when.</p>
           <ol className="mt-4 space-y-4">
             {order.activity?.map((item) => (
@@ -1481,8 +1797,7 @@ function OrderDetailPage() {
         </div>
       </section>
       {order.status === "active" &&
-        (currentUser.role === "admin" ||
-          currentUser.role === "order_manager") && (
+        currentUser.role === "admin" && (
           <section className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-5">
             <h2 className="font-bold text-red-900">
               Need to cancel this order?
@@ -1667,18 +1982,18 @@ function StageFields({
       {quantityStages.includes(stage) && (
         <>
           <label className="label">Completed quantity</label>
-          <input
-            className="field"
-            type="number"
-            min="0"
-            max={order.quantity}
-            value={quantity}
-            onChange={(event) =>
-              setQuantity(
-                event.target.value === "" ? "" : Number(event.target.value),
-              )
-            }
-          />
+          <div className="flex min-h-16 overflow-hidden rounded-xl border-2 border-slate-200 bg-slate-50 focus-within:border-sky-500">
+            <button type="button" className="min-w-16 border-r border-slate-200 text-3xl font-bold text-navy-900 hover:bg-slate-100" aria-label="Decrease completed quantity by 10" onClick={() => setQuantity(Math.max(0, Number(quantity || 0) - 10))}>−</button>
+            <input
+              className="min-w-0 flex-1 border-0 bg-transparent text-center text-2xl font-extrabold text-navy-900 focus:ring-0"
+              type="number"
+              min="0"
+              max={order.quantity}
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value === "" ? "" : Number(event.target.value))}
+            />
+            <button type="button" className="min-w-16 border-l border-slate-200 text-3xl font-bold text-navy-900 hover:bg-slate-100" aria-label="Increase completed quantity by 10" onClick={() => setQuantity(Math.min(order.quantity, Number(quantity || 0) + 10))}>+</button>
+          </div>
           <p className="mt-1 text-xs text-slate-500">
             Maximum {order.quantity.toLocaleString("en-IN")} bags
           </p>
@@ -1698,19 +2013,13 @@ function StageFields({
 function DynamicFields({ stage }: { stage: StageKey }) {
   if (stage === "material")
     return (
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Field
-          name="requiredQuantity"
-          label="Required material"
-          type="number"
-          min="0"
-        />
-        <Field
-          name="availableQuantity"
-          label="Available material"
-          type="number"
-          min="0"
-        />
+      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <p className="font-bold text-amber-950">Material check</p>
+        <p className="mt-1 text-sm text-amber-900">Count the available material before confirming. If it is less than required, report an issue instead.</p>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Field name="requiredQuantity" label="Required quantity" type="number" min="0" />
+          <Field name="availableQuantity" label="Available quantity" type="number" min="0" />
+        </div>
       </div>
     );
   if (stage === "printing")
@@ -1718,6 +2027,10 @@ function DynamicFields({ stage }: { stage: StageKey }) {
       <>
         <Field name="machine" label="Printing machine" />
         <Field name="operatorNote" label="Print details" />
+        <label className="mt-4 flex min-h-14 items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <span><strong className="block">Quality check passed</strong><span className="text-sm text-slate-500">Check print alignment and colour before finishing.</span></span>
+          <input className="size-6 accent-emerald-600" name="qualityChecked" type="checkbox" defaultChecked />
+        </label>
       </>
     );
   if (stage === "packing")
@@ -2161,11 +2474,12 @@ function TeamPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [role, setRole] = useState<Role>("order_manager");
+  const [role, setRole] = useState<Role>("cutting_master");
   const [managedUser, setManagedUser] = useState<User | null>(null);
+  const [managedRole, setManagedRole] = useState<Role>("cutting_master");
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [accountAction, setAccountAction] = useState<
-    "activate" | "deactivate" | "reset" | null
+    "activate" | "deactivate" | "reset" | "role" | "delete" | null
   >(null);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2194,11 +2508,20 @@ function TeamPage() {
     if (!managedUser || !accountAction) return;
     setBusy(true);
     try {
-      if (accountAction === "reset") {
+      if (accountAction === "delete") {
+        await api.deleteUser(managedUser.id);
+        toast("User permanently deleted. Previous order history is kept.");
+      } else if (accountAction === "reset") {
         await api.resetPassword(managedUser.id, temporaryPassword);
         toast(
           "Temporary password reset. The employee must change it after sign-in.",
         );
+      } else if (accountAction === "role") {
+        await api.updateUser(managedUser.id, {
+          role: managedRole,
+          department: departmentFor[managedRole],
+        });
+        toast(`Role changed to ${roleLabels[managedRole]}.`);
       } else {
         await api.updateUser(managedUser.id, {
           active: accountAction === "activate",
@@ -2237,35 +2560,47 @@ function TeamPage() {
         }
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {users.map((user) => (
-          <article className="surface p-4" key={user.id}>
-            <div className="flex items-center gap-3">
-              <span className="grid size-12 place-items-center rounded-full bg-navy-900 font-bold text-white">
-                {user.initials}
-              </span>
-              <div className="min-w-0">
-                <h2 className="truncate font-bold">{user.name}</h2>
-                <p className="truncate text-sm text-slate-500">
-                  {roleLabels[user.role]}
+        {users.map((user) => {
+          const visual = roleVisuals[operatingRole(user.role)];
+          const RoleIcon = visual.icon;
+          return (
+            <article className="surface p-4" key={user.id}>
+              <div className="flex items-center gap-3">
+                <span className={`grid size-12 place-items-center rounded-full ${visual.soft} ${visual.color}`}>
+                  <RoleIcon className="size-6" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="truncate font-bold">{user.name}</h2>
+                  <p className={`flex items-center gap-1.5 text-sm font-semibold ${visual.color}`}>
+                    <RoleIcon className="size-3.5" aria-hidden="true" />
+                    {roleLabels[operatingRole(user.role)]}
+                  </p>
+                </div>
+              </div>
+              <div className={`mt-4 rounded-xl ${visual.soft} p-3`}>
+                <p className={`text-sm font-bold ${visual.color}`}>This person handles</p>
+                <p className="mt-1 text-sm leading-5 text-slate-700">
+                  {roleResponsibilities[operatingRole(user.role)]}
                 </p>
               </div>
-            </div>
-            <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-3 text-sm">
-              <span>{user.department}</span>
-              <span
-                className={`font-bold ${user.active ? "text-emerald-700" : "text-red-700"}`}
+              <div className="mt-3 flex items-center justify-between text-sm">
+                <span className="text-slate-600">{user.department}</span>
+                <span className={`font-bold ${user.active ? "text-emerald-700" : "text-red-700"}`}>
+                  {user.active ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <button
+                className="secondary-button mt-3 w-full"
+                onClick={() => {
+                  setManagedUser(user);
+                  setManagedRole(operatingRole(user.role));
+                }}
               >
-                {user.active ? "Active" : "Inactive"}
-              </span>
-            </div>
-            <button
-              className="secondary-button mt-3 w-full"
-              onClick={() => setManagedUser(user)}
-            >
-              Manage account
-            </button>
-          </article>
-        ))}
+                Manage account
+              </button>
+            </article>
+          );
+        })}
         {!users.length && (
           <Empty
             title="Only the bootstrap Admin exists"
@@ -2292,10 +2627,10 @@ function TeamPage() {
               onChange={(event) => setRole(event.target.value as Role)}
             >
               {Object.entries(roleLabels)
-                .filter(([key]) => key !== "admin")
+                .filter(([key]) => factoryRoles.includes(key as Role))
                 .map(([key, value]) => (
                   <option value={key} key={key}>
-                    {value}
+                    {value} — {roleResponsibilities[key as Role]}
                   </option>
                 ))}
             </select>
@@ -2348,6 +2683,16 @@ function TeamPage() {
             <strong>{roleLabels[managedUser.role]}</strong> ·{" "}
             {managedUser.department}
           </p>
+          {managedUser.id !== currentUser?.id && (
+            <>
+              <label className="label mt-5">Factory role</label>
+              <select className="field" value={managedRole} onChange={(event) => setManagedRole(event.target.value as Role)}>
+                {factoryRoles.map((item) => <option value={item} key={item}>{roleLabels[item]}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">Department: {departmentFor[managedRole]}</p>
+              <button className="secondary-button mt-3 w-full" disabled={busy} onClick={() => setAccountAction("role")}>Change factory role</button>
+            </>
+          )}
           <label className="label mt-5" htmlFor="reset-password">
             New temporary password
           </label>
@@ -2368,15 +2713,27 @@ function TeamPage() {
             Reset temporary password
           </button>
           {managedUser.id !== currentUser?.id && (
-            <button
-              className={`mt-3 w-full ${managedUser.active ? "secondary-button !border-red-200 !text-red-700" : "primary-button"}`}
-              disabled={busy}
-              onClick={() =>
-                setAccountAction(managedUser.active ? "deactivate" : "activate")
-              }
-            >
-              {managedUser.active ? "Deactivate account" : "Activate account"}
-            </button>
+            <>
+              <button
+                className={`mt-3 w-full ${managedUser.active ? "secondary-button !border-red-200 !text-red-700" : "primary-button"}`}
+                disabled={busy}
+                onClick={() =>
+                  setAccountAction(managedUser.active ? "deactivate" : "activate")
+                }
+              >
+                {managedUser.active ? "Deactivate account" : "Activate account"}
+              </button>
+              <button
+                className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={busy}
+                onClick={() => setAccountAction("delete")}
+              >
+                Permanently delete user
+              </button>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Use this only for duplicate or unwanted accounts. It cannot be undone.
+              </p>
+            </>
           )}
           {managedUser.id === currentUser?.id && (
             <p className="mt-3 text-xs text-slate-500">
@@ -2390,6 +2747,10 @@ function TeamPage() {
         title={
           accountAction === "reset"
             ? "Reset this password?"
+            : accountAction === "delete"
+              ? "Permanently delete this user?"
+            : accountAction === "role"
+              ? `Change role to ${roleLabels[managedRole]}?`
             : accountAction === "deactivate"
               ? "Deactivate this account?"
               : "Activate this account?"
@@ -2397,6 +2758,10 @@ function TeamPage() {
         message={
           accountAction === "reset"
             ? "The employee will be signed out on every device and must use the new temporary password."
+            : accountAction === "delete"
+              ? "This permanently removes their sign-in account and signs them out. Their past order activity stays visible for production records. This cannot be undone."
+            : accountAction === "role"
+              ? "This changes which work steps the employee can open. Their previous role will no longer have access."
             : accountAction === "deactivate"
               ? "The employee will be signed out and cannot access any orders until an Admin activates the account again."
               : "The employee will be able to sign in and see work allowed for this role."
@@ -2404,6 +2769,10 @@ function TeamPage() {
         confirmLabel={
           accountAction === "reset"
             ? "Yes, reset password"
+            : accountAction === "delete"
+              ? "Yes, permanently delete"
+            : accountAction === "role"
+              ? "Yes, change role"
             : accountAction === "deactivate"
               ? "Yes, deactivate account"
               : "Yes, activate account"

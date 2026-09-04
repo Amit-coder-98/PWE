@@ -50,8 +50,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadData = async (user: User) => {
     const canViewCustomers = [
       "admin",
-      "order_manager",
       "accountant",
+      "transport_manager",
+      "marketing",
       "dispatch_manager",
     ].includes(user.role);
     const [orderData, customerData, userData] = await Promise.all([

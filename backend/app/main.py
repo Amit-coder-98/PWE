@@ -39,7 +39,7 @@ def create_app(settings_override: Settings | None = None, repository_override: M
     settings = settings_override or get_settings()
     repository = repository_override or MongoRepository(settings)
     storage = storage_override or R2Storage(settings)
-    application = FastAPI(title="Prabodhan Bag Operations API", version="1.0.0")
+    application = FastAPI(title="Prabodhan WE Bag Operations API", version="1.0.0")
     application.state.settings = settings
     application.state.repository = repository
     application.state.storage = storage
@@ -112,8 +112,8 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         return user
 
     def order_staff(user: dict = Depends(current_user)) -> dict:
-        if user["role"] not in {Role.ADMIN.value, Role.ORDER_MANAGER.value}:
-            raise HTTPException(403, "Only Order staff or a Super Admin can perform this action.")
+        if user["role"] not in {Role.ADMIN.value, Role.MARKETING.value}:
+            raise HTTPException(403, "Only Marketing or the Super Admin can create or change customers and orders.")
         return user
 
     def design_staff(user: dict = Depends(current_user)) -> dict:
@@ -122,16 +122,16 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         return user
 
     def customer_staff(user: dict = Depends(current_user)) -> dict:
-        allowed = {Role.ADMIN.value, Role.ORDER_MANAGER.value, Role.ACCOUNTANT.value, Role.DISPATCH_MANAGER.value}
+        allowed = {Role.ADMIN.value, Role.ACCOUNTANT.value, Role.TRANSPORT_MANAGER.value, Role.MARKETING.value, Role.DISPATCH_MANAGER.value}
         if user["role"] not in allowed:
             raise HTTPException(403, "Customer records are hidden for this role.")
         return user
 
     def visible_order(document: dict, actor: dict) -> dict:
         result = deepcopy(document)
-        if actor["role"] not in {Role.ADMIN.value, Role.ORDER_MANAGER.value, Role.ACCOUNTANT.value}:
+        if actor["role"] not in {Role.ADMIN.value, Role.ACCOUNTANT.value}:
             result["amount"] = 0
-        if actor["role"] not in {Role.ADMIN.value, Role.ORDER_MANAGER.value, Role.ACCOUNTANT.value, Role.DISPATCH_MANAGER.value}:
+        if actor["role"] not in {Role.ADMIN.value, Role.ACCOUNTANT.value, Role.TRANSPORT_MANAGER.value, Role.MARKETING.value, Role.DISPATCH_MANAGER.value}:
             result["phone"] = ""
         return result
 
@@ -215,6 +215,26 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         if fields.get("active") is False:
             repository.revoke_user_sessions(user_id)
         return user
+
+    @application.delete("/api/users/{user_id}", response_model=ApiMessage, dependencies=[Depends(require_csrf)])
+    def delete_user(user_id: str, actor: dict = Depends(admin)):
+        if user_id == actor["id"]:
+            raise HTTPException(422, "You cannot permanently delete the account you are signed in with.")
+        user = repository.get_user(user_id)
+        if not user:
+            raise HTTPException(404, "User not found.")
+        if user["role"] == Role.ADMIN.value:
+            active_admins = sum(
+                1
+                for item in repository.list_users()
+                if item["role"] == Role.ADMIN.value and item.get("active")
+            )
+            if active_admins <= 1:
+                raise HTTPException(422, "Keep at least one active Super Admin account.")
+        repository.revoke_user_sessions(user_id)
+        if not repository.delete_user(user_id):
+            raise HTTPException(404, "User not found.")
+        return {"message": "User permanently deleted. Previous order history remains available."}
 
     @application.post("/api/users/{user_id}/reset-password", response_model=ApiMessage, dependencies=[Depends(require_csrf)])
     def reset_password(user_id: str, payload: PasswordResetRequest, _: dict = Depends(admin)):

@@ -5,6 +5,7 @@ node_modules
 dist
 .env
 .env.*
+.vercel.env
 !.env.example
 __pycache__/
 .pytest_cache/

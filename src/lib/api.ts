@@ -114,6 +114,8 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
+  deleteUser: (id: string) =>
+    request<{ message: string }>(`/api/users/${id}`, { method: "DELETE" }),
   resetPassword: (id: string, temporaryPassword: string) =>
     request<{ message: string }>(`/api/users/${id}/reset-password`, {
       method: "POST",

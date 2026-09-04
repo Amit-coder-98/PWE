@@ -7,8 +7,8 @@ from .models import Role, StageAction, StageKey, StageStatus
 
 DEPENDENCIES: dict[StageKey, list[StageKey]] = {
     StageKey.MATERIAL: [StageKey.ORDER], StageKey.DESIGN: [StageKey.ORDER],
-    StageKey.CUTTING: [StageKey.MATERIAL], StageKey.PLATE: [StageKey.DESIGN],
-    StageKey.PRINTING: [StageKey.CUTTING, StageKey.PLATE], StageKey.STITCHING: [StageKey.PRINTING],
+    StageKey.CUTTING: [StageKey.ORDER], StageKey.PLATE: [StageKey.ORDER],
+    StageKey.PRINTING: [StageKey.MATERIAL, StageKey.CUTTING, StageKey.DESIGN, StageKey.PLATE], StageKey.STITCHING: [StageKey.PRINTING],
     StageKey.PACKING: [StageKey.STITCHING], StageKey.DC: [StageKey.PACKING],
     StageKey.BILLING: [StageKey.DC], StageKey.PAYMENT: [StageKey.BILLING],
     StageKey.DISPATCH: [StageKey.BILLING], StageKey.DELIVERY: [StageKey.PAYMENT, StageKey.DISPATCH],
@@ -16,14 +16,23 @@ DEPENDENCIES: dict[StageKey, list[StageKey]] = {
 }
 
 STAGE_ROLES: dict[StageKey, Role] = {
-    StageKey.ORDER: Role.ORDER_MANAGER, StageKey.MATERIAL: Role.INVENTORY_MANAGER,
-    StageKey.DESIGN: Role.DESIGNER, StageKey.CUTTING: Role.CUTTING_MANAGER,
-    StageKey.PLATE: Role.PLATE_OPERATOR, StageKey.PRINTING: Role.PRINTING_OPERATOR,
-    StageKey.STITCHING: Role.STITCHING_MANAGER, StageKey.PACKING: Role.PACKING_MANAGER,
-    StageKey.DC: Role.PACKING_MANAGER, StageKey.BILLING: Role.ACCOUNTANT,
-    StageKey.PAYMENT: Role.ACCOUNTANT, StageKey.DISPATCH: Role.DISPATCH_MANAGER,
-    StageKey.DELIVERY: Role.DISPATCH_MANAGER, StageKey.RETURN: Role.DISPATCH_MANAGER,
+    StageKey.ORDER: Role.ADMIN, StageKey.MATERIAL: Role.CUTTING_MASTER,
+    StageKey.DESIGN: Role.DESIGNER, StageKey.CUTTING: Role.CUTTING_MASTER,
+    StageKey.PLATE: Role.TRANSPORT_MANAGER, StageKey.PRINTING: Role.PRINTING_OPERATOR,
+    StageKey.STITCHING: Role.MANAGER, StageKey.PACKING: Role.MANAGER,
+    StageKey.DC: Role.MANAGER, StageKey.BILLING: Role.ACCOUNTANT,
+    StageKey.PAYMENT: Role.ACCOUNTANT, StageKey.DISPATCH: Role.TRANSPORT_MANAGER,
+    StageKey.DELIVERY: Role.MARKETING, StageKey.RETURN: Role.MARKETING,
     StageKey.REFUND: Role.ACCOUNTANT,
+}
+
+LEGACY_ROLE_ALIASES = {
+    Role.INVENTORY_MANAGER: Role.CUTTING_MASTER,
+    Role.CUTTING_MANAGER: Role.CUTTING_MASTER,
+    Role.PLATE_OPERATOR: Role.TRANSPORT_MANAGER,
+    Role.DISPATCH_MANAGER: Role.TRANSPORT_MANAGER,
+    Role.STITCHING_MANAGER: Role.MANAGER,
+    Role.PACKING_MANAGER: Role.MANAGER,
 }
 
 SEQUENCE = [StageKey.MATERIAL, StageKey.DESIGN, StageKey.CUTTING, StageKey.PLATE, StageKey.PRINTING,
@@ -33,16 +42,19 @@ SEQUENCE = [StageKey.MATERIAL, StageKey.DESIGN, StageKey.CUTTING, StageKey.PLATE
 
 def initial_stages() -> dict[str, dict]:
     result = {key.value: {"status": StageStatus.WAITING.value, "ownerRole": STAGE_ROLES[key].value} for key in StageKey}
-    result[StageKey.ORDER.value] = {"status": StageStatus.COMPLETED.value, "ownerRole": Role.ORDER_MANAGER.value,
+    result[StageKey.ORDER.value] = {"status": StageStatus.COMPLETED.value, "ownerRole": Role.ADMIN.value,
                                     "completedAt": datetime.now(timezone.utc).isoformat()}
     result[StageKey.MATERIAL.value]["status"] = StageStatus.READY.value
     result[StageKey.DESIGN.value]["status"] = StageStatus.READY.value
+    result[StageKey.CUTTING.value]["status"] = StageStatus.READY.value
+    result[StageKey.PLATE.value]["status"] = StageStatus.READY.value
     return result
 
 
 def assert_permission(role: Role, stage: StageKey) -> None:
     owner = STAGE_ROLES[stage]
-    if owner != role:
+    effective_role = LEGACY_ROLE_ALIASES.get(role, role)
+    if owner != effective_role:
         raise HTTPException(
             403,
             f"This step belongs to the {owner.value.replace('_', ' ')}. Ask that team member to update it.",
