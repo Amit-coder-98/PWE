@@ -148,6 +148,14 @@ export const api = {
     product: string;
     quantity: number;
     amount: number;
+    bagType?: string;
+    bagSize?: string;
+    printingColor?: string;
+    ratePerBag?: number;
+    advancePaid?: number;
+    primaryPhone?: string;
+    alternativePhone?: string;
+    gstNumber?: string;
     expectedDelivery: string;
     priority: string;
     notes?: string;
@@ -155,6 +163,27 @@ export const api = {
     request<Order>("/api/orders", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+  updateOrder: (order: Order, data: {
+    customerId: string;
+    product: string;
+    quantity: number;
+    amount: number;
+    bagType?: string;
+    bagSize?: string;
+    printingColor?: string;
+    ratePerBag?: number;
+    advancePaid?: number;
+    primaryPhone?: string;
+    alternativePhone?: string;
+    gstNumber?: string;
+    expectedDelivery: string;
+    priority: string;
+    notes?: string;
+  }) =>
+    request<Order>(`/api/orders/${order.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ...data, expectedVersion: order.version }),
     }),
   cancelOrder: (order: Order, reason: string) =>
     request<Order>(`/api/orders/${order.id}/cancel`, {
@@ -165,8 +194,7 @@ export const api = {
     order: Order,
     stage: StageKey,
     data: {
-      action: string;
-      completedQuantity?: number;
+      action: "complete" | "block" | "resolve";
       note?: string;
       data?: Record<string, unknown>;
     },
@@ -175,12 +203,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ ...data, expectedVersion: order.version }),
     }),
+  markMaterialAvailable: (order: Order) =>
+    request<Order>(`/api/orders/${order.id}/material/available`, {
+      method: "POST",
+      body: JSON.stringify({ expectedVersion: order.version }),
+    }),
   noImage: (order: Order, note: string) =>
     request<Order>(`/api/orders/${order.id}/design/no-image`, {
       method: "POST",
       body: JSON.stringify({ note, expectedVersion: order.version }),
     }),
-  uploadIntent: (orderId: string, file: File) =>
+  uploadIntent: (orderId: string, file: File, assetType: "design" | "payment_proof" = "design") =>
     request<{ asset: DesignAsset; uploadUrl: string }>(
       `/api/orders/${orderId}/design-assets/upload-intent`,
       {
@@ -189,6 +222,7 @@ export const api = {
           fileName: file.name,
           contentType: file.type,
           size: file.size,
+          assetType,
         }),
       },
     ),

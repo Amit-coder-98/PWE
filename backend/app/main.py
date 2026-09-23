@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import secrets
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -15,15 +16,16 @@ from pymongo.errors import DuplicateKeyError
 
 from .config import Settings, get_settings
 from .models import (
-    ApiMessage, CustomerCreate, CustomerDocument, LoginRequest, NoImageRequest, OrderCancelRequest, OrderCreate, OrderDocument,
+    ApiMessage, CustomerCreate, CustomerDocument, LoginRequest, MaterialAvailabilityRequest, NoImageRequest, OrderCancelRequest, OrderCreate, OrderDocument, OrderUpdate,
     PasswordChangeRequest, PasswordResetRequest, PublicDecisionRequest, Role, StaffDecisionRequest, StageKey,
     StageStatus, StageUpdateRequest, SubmitReviewRequest, UploadIntentRequest, UserCreate, UserPublic, UserUpdate,
 )
 from .repository import MongoRepository, now
 from .storage import R2Storage
-from .workflow import apply_action, assert_permission, refresh_ready_states
+from .workflow import LEGACY_ROLE_ALIASES, STAGE_ROLES, apply_action, assert_permission, refresh_ready_states
 
 password_hash = PasswordHash.recommended()
+logger = logging.getLogger(__name__)
 
 
 def hash_token(value: str) -> str:
@@ -48,7 +50,8 @@ def create_app(settings_override: Settings | None = None, repository_override: M
 
     @application.middleware("http")
     async def request_id(request: Request, call_next):
-        request.state.request_id = request.headers.get("x-request-id", str(uuid4()))
+        supplied_request_id = request.headers.get("x-request-id", "").strip()
+        request.state.request_id = supplied_request_id if 0 < len(supplied_request_id) <= 128 else str(uuid4())
         response = await call_next(request)
         response.headers["x-request-id"] = request.state.request_id
         return response
@@ -61,6 +64,19 @@ def create_app(settings_override: Settings | None = None, repository_override: M
     async def validation_error(request: Request, exc: RequestValidationError):
         fields = [{"field": ".".join(str(item) for item in error["loc"][1:]), "message": error["msg"]} for error in exc.errors()]
         return JSONResponse(status_code=422, content={"code": "VALIDATION_ERROR", "message": "Please correct the highlighted information.", "fields": fields, "requestId": request.state.request_id})
+
+    @application.exception_handler(Exception)
+    async def unexpected_error(request: Request, exc: Exception):
+        request_identifier = getattr(request.state, "request_id", str(uuid4()))
+        logger.exception("Unhandled API error. request_id=%s", request_identifier, exc_info=exc)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": "INTERNAL_ERROR",
+                "message": "The request could not be completed. Please try again.",
+                "requestId": request_identifier,
+            },
+        )
 
     def repo() -> MongoRepository:
         if not repository.ready:
@@ -117,22 +133,68 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         return user
 
     def design_staff(user: dict = Depends(current_user)) -> dict:
-        if user["role"] not in {Role.ADMIN.value, Role.DESIGNER.value, Role.ORDER_MANAGER.value}:
-            raise HTTPException(403, "Only Design, Order staff, or a Super Admin can perform this action.")
+        if user["role"] not in {Role.ADMIN.value, Role.MARKETING.value, Role.ORDER_MANAGER.value}:
+            raise HTTPException(403, "Only Marketing, Order staff, or a Super Admin can manage customer design approval.")
+        return user
+
+    def asset_upload_staff(user: dict = Depends(current_user)) -> dict:
+        if user["role"] not in {Role.ADMIN.value, Role.MARKETING.value, Role.ORDER_MANAGER.value}:
+            raise HTTPException(403, "Only Marketing, Order staff, or a Super Admin can upload a file.")
         return user
 
     def customer_staff(user: dict = Depends(current_user)) -> dict:
-        allowed = {Role.ADMIN.value, Role.ACCOUNTANT.value, Role.TRANSPORT_MANAGER.value, Role.MARKETING.value, Role.DISPATCH_MANAGER.value}
+        allowed = {Role.ADMIN.value, Role.MARKETING.value}
         if user["role"] not in allowed:
             raise HTTPException(403, "Customer records are hidden for this role.")
         return user
 
+    def effective_role(actor: dict) -> Role:
+        role = Role(actor["role"])
+        return LEGACY_ROLE_ALIASES.get(role, role)
+
+    def can_access_order(document: dict, actor: dict) -> bool:
+        role = effective_role(actor)
+        if role in {Role.ADMIN, Role.MARKETING}:
+            return True
+        if document.get("status") != "active":
+            return False
+        active_statuses = {
+            StageStatus.READY.value,
+            StageStatus.IN_PROGRESS.value,
+            StageStatus.BLOCKED.value,
+            StageStatus.ISSUE.value,
+        }
+        return any(
+            STAGE_ROLES.get(stage) == role and document.get("stages", {}).get(stage.value, {}).get("status") in active_statuses
+            for stage in StageKey
+        )
+
+    def require_order_access(document: dict, actor: dict) -> None:
+        if not can_access_order(document, actor):
+            raise HTTPException(403, "This order is not currently assigned to your work.")
+
     def visible_order(document: dict, actor: dict) -> dict:
         result = deepcopy(document)
-        if actor["role"] not in {Role.ADMIN.value, Role.ACCOUNTANT.value}:
+        role = effective_role(actor)
+        if role not in {Role.ADMIN, Role.ACCOUNTANT}:
             result["amount"] = 0
-        if actor["role"] not in {Role.ADMIN.value, Role.ACCOUNTANT.value, Role.TRANSPORT_MANAGER.value, Role.MARKETING.value, Role.DISPATCH_MANAGER.value}:
+            result["ratePerBag"] = None
+            result["advancePaid"] = 0
+            result["remainingAmount"] = 0
+        if role not in {Role.ADMIN, Role.ACCOUNTANT, Role.TRANSPORT_MANAGER, Role.MARKETING}:
             result["phone"] = ""
+            result["alternativePhone"] = None
+        if role not in {Role.ADMIN, Role.ACCOUNTANT, Role.MARKETING}:
+            result["gstNumber"] = None
+        if role not in {Role.ADMIN, Role.MARKETING, Role.DESIGNER, Role.TRANSPORT_MANAGER}:
+            result["designAssets"] = []
+        for event in result.get("activity", []):
+            event_stage = event.get("stage")
+            owns_event_stage = any(key.value == event_stage and STAGE_ROLES.get(key) == role for key in StageKey)
+            if role not in {Role.ADMIN, Role.MARKETING} and not owns_event_stage and not (
+                role == Role.ACCOUNTANT and event_stage in {StageKey.BILLING.value, StageKey.PAYMENT.value, StageKey.REFUND.value}
+            ):
+                event["details"] = {}
         return result
 
     @application.get("/api/health")
@@ -240,6 +302,7 @@ def create_app(settings_override: Settings | None = None, repository_override: M
     def reset_password(user_id: str, payload: PasswordResetRequest, _: dict = Depends(admin)):
         if not repository.update_user(user_id, {"passwordHash": password_hash.hash(payload.temporaryPassword), "mustChangePassword": True}):
             raise HTTPException(404, "User not found.")
+        repository.clear_failed_logins(user_id)
         repository.revoke_user_sessions(user_id)
         return {"message": "Temporary password created. The user must change it after signing in."}
 
@@ -260,22 +323,67 @@ def create_app(settings_override: Settings | None = None, repository_override: M
 
     @application.get("/api/orders", response_model=list[OrderDocument])
     def orders(search: str = Query(default="", max_length=100), stage: str | None = None, actor: dict = Depends(current_user)):
-        return [visible_order(document, actor) for document in repository.list_orders(search, stage)]
+        return [
+            visible_order(document, actor)
+            for document in repository.list_orders(search, stage)
+            if can_access_order(document, actor)
+        ]
 
     @application.post("/api/orders", response_model=OrderDocument, dependencies=[Depends(require_csrf)])
     def create_order(payload: OrderCreate, actor: dict = Depends(order_staff)):
         customer = repository.get_customer(payload.customerId)
         if not customer:
             raise HTTPException(422, "Choose a valid customer before creating the order.")
+        if payload.advancePaid > payload.amount:
+            raise HTTPException(422, "Advance payment cannot be more than the total order amount.")
         data = payload.model_dump(mode="json")
         data["priority"] = payload.priority.value
         return repository.create_order(data, customer, actor)
+
+    @application.patch("/api/orders/{order_id}", response_model=OrderDocument, dependencies=[Depends(require_csrf)])
+    def update_order(order_id: str, payload: OrderUpdate, actor: dict = Depends(order_staff)):
+        order_document = repository.get_order(order_id)
+        if not order_document:
+            raise HTTPException(404, "Order not found.")
+        if order_document["version"] != payload.expectedVersion:
+            raise HTTPException(409, "This order changed on another device. Refresh before editing it.")
+        if order_document["status"] != "active":
+            raise HTTPException(409, "Only an active order can be edited.")
+        if payload.advancePaid > payload.amount:
+            raise HTTPException(422, "Advance payment cannot be more than the total order amount.")
+        if payload.quantity != order_document["quantity"] and any(
+            state["status"] in {"in_progress", "completed"}
+            for key, state in order_document["stages"].items()
+            if key not in {StageKey.ORDER.value, StageKey.MATERIAL.value, StageKey.DESIGN.value, StageKey.PLATE.value}
+        ):
+            raise HTTPException(409, "Quantity cannot be changed after production has started. Create a revised order instead.")
+        customer = repository.get_customer(payload.customerId)
+        if not customer:
+            raise HTTPException(422, "Choose a valid customer before saving the order.")
+        data = payload.model_dump(mode="json")
+        order_document.update({
+            "customerId": customer["id"], "customer": customer["companyName"], "contactPerson": customer["contactPerson"],
+            "phone": data.get("primaryPhone") or customer["phone"], "alternativePhone": data.get("alternativePhone") or customer.get("alternativePhone"),
+            "gstNumber": data.get("gstNumber") or customer.get("gstNumber"), "product": data["product"], "quantity": data["quantity"],
+            "amount": data["amount"], "bagType": data.get("bagType"), "bagSize": data.get("bagSize"),
+            "printingColor": data.get("printingColor"), "ratePerBag": data.get("ratePerBag"), "advancePaid": data["advancePaid"],
+            "remainingAmount": data["amount"] - data["advancePaid"], "expectedDelivery": data["expectedDelivery"],
+            "priority": payload.priority.value, "notes": data.get("notes"),
+        })
+        saved = repository.replace_order(order_document, payload.expectedVersion)
+        if not saved:
+            raise HTTPException(409, "This order changed on another device. Refresh before editing it.")
+        repository.add_audit(order_id, actor, "order", "Updated order booking details.")
+        saved["activity"] = repository.list_audit(order_id)
+        saved["designAssets"] = repository.list_assets(order_id)
+        return visible_order(saved, actor)
 
     @application.get("/api/orders/{order_id}")
     def order(order_id: str, actor: dict = Depends(current_user)):
         document = repository.get_order(order_id)
         if not document:
             raise HTTPException(404, "Order not found.")
+        require_order_access(document, actor)
         document["activity"] = repository.list_audit(order_id)
         document["designAssets"] = repository.list_assets(order_id)
         return visible_order(document, actor)
@@ -307,10 +415,11 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         order_document = repository.get_order(order_id)
         if not order_document:
             raise HTTPException(404, "Order not found.")
+        require_order_access(order_document, actor)
         if order_document["version"] != payload.expectedVersion:
             raise HTTPException(409, "This order changed on another device. Refresh before trying again.")
         assert_permission(Role(actor["role"]), stage_key)
-        message = apply_action(order_document, stage_key, payload.action, payload.completedQuantity, payload.note, payload.data)
+        message = apply_action(order_document, stage_key, payload.action, payload.note, payload.data)
         if stage_key == StageKey.DELIVERY and payload.action.value == "complete":
             order_document["status"] = "completed"
             order_document["closedAt"] = now()
@@ -321,6 +430,24 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         repository.add_audit(order_id, actor, stage_key.value, message, {"data": payload.data, "note": payload.note})
         saved["activity"] = repository.list_audit(order_id)
         saved["designAssets"] = repository.list_assets(order_id)
+        return visible_order(saved, actor)
+
+    @application.post("/api/orders/{order_id}/material/available", dependencies=[Depends(require_csrf)])
+    def mark_material_available(order_id: str, payload: MaterialAvailabilityRequest, actor: dict = Depends(admin)):
+        order_document = repository.get_order(order_id)
+        if not order_document:
+            raise HTTPException(404, "Order not found.")
+        if order_document["version"] != payload.expectedVersion:
+            raise HTTPException(409, "This order changed on another device. Refresh before trying again.")
+        material = order_document["stages"]["material"]
+        if material["status"] not in {"blocked", "issue"}:
+            raise HTTPException(409, "Material is not currently marked unavailable.")
+        material.update(status="ready", note="Admin confirmed material is now available.", data={"materialAvailable": "yes", "confirmedByAdmin": True})
+        refresh_ready_states(order_document)
+        saved = repository.replace_order(order_document, payload.expectedVersion)
+        if not saved:
+            raise HTTPException(409, "This order changed on another device. Refresh before trying again.")
+        repository.add_audit(order_id, actor, "material", "Admin confirmed material is available. Cutting Master can check it again.")
         return visible_order(saved, actor)
 
     @application.post("/api/orders/{order_id}/design/no-image", dependencies=[Depends(require_csrf)])
@@ -347,14 +474,16 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         return storage
 
     @application.post("/api/orders/{order_id}/design-assets/upload-intent", dependencies=[Depends(require_csrf)])
-    def upload_intent(order_id: str, payload: UploadIntentRequest, actor: dict = Depends(design_staff)):
+    def upload_intent(order_id: str, payload: UploadIntentRequest, actor: dict = Depends(asset_upload_staff)):
         require_storage()
         if not repository.get_order(order_id):
             raise HTTPException(404, "Order not found.")
         extension = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[payload.contentType]
         asset_id = str(uuid4())
-        key = f"orders/{order_id}/design/{asset_id}.{extension}"
-        document = {"id": asset_id, "orderId": order_id, "version": repository.next_design_version(order_id), "objectKey": key,
+        folder = "payment-proofs" if payload.assetType == "payment_proof" else "design"
+        version = 0 if payload.assetType == "payment_proof" else repository.next_design_version(order_id)
+        key = f"orders/{order_id}/{folder}/{asset_id}.{extension}"
+        document = {"id": asset_id, "orderId": order_id, "assetType": payload.assetType, "version": version, "objectKey": key,
                     "fileName": Path(payload.fileName).name, "contentType": payload.contentType, "expectedSize": payload.size,
                     "status": "pending", "uploadedBy": actor["id"], "uploadedByName": actor["name"], "createdAt": now(),
                     "updatedAt": now(), "uploadExpiresAt": now() + timedelta(hours=24), "deleteAfter": None}
@@ -362,7 +491,7 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         return {"asset": document, "uploadUrl": storage.upload_url(key, payload.contentType), "expiresIn": 900}
 
     @application.post("/api/design-assets/{asset_id}/complete", dependencies=[Depends(require_csrf)])
-    def complete_upload(asset_id: str, actor: dict = Depends(design_staff)):
+    def complete_upload(asset_id: str, actor: dict = Depends(asset_upload_staff)):
         require_storage()
         asset = repository.get_asset(asset_id)
         if not asset or asset["status"] != "pending":
@@ -376,15 +505,35 @@ def create_app(settings_override: Settings | None = None, repository_override: M
             repository.update_asset(asset_id, {"status": "rejected", "validationError": str(exc)})
             raise HTTPException(422, str(exc)) from exc
         active = repository.update_asset(asset_id, {"status": "available", **verified, "verifiedAt": now()})
-        repository.add_audit(asset["orderId"], actor, "design", f"Uploaded design version {asset['version']}.", {"assetId": asset_id, "fileName": asset["fileName"]})
+        is_payment_proof = asset.get("assetType") == "payment_proof"
+        repository.add_audit(
+            asset["orderId"],
+            actor,
+            "payment" if is_payment_proof else "design",
+            "Uploaded advance payment proof." if is_payment_proof else f"Uploaded design version {asset['version']}.",
+            {"assetId": asset_id, "fileName": asset["fileName"]},
+        )
         return active
 
     @application.get("/api/design-assets/{asset_id}/view-url")
-    def view_asset(asset_id: str, _: dict = Depends(current_user)):
+    def view_asset(asset_id: str, actor: dict = Depends(current_user)):
         require_storage()
         asset = repository.get_asset(asset_id)
         if not asset or asset["status"] in {"pending", "deleted", "rejected"}:
             raise HTTPException(404, "Image is unavailable.")
+        order_document = repository.get_order(asset["orderId"])
+        if not order_document:
+            raise HTTPException(404, "Order not found.")
+        require_order_access(order_document, actor)
+        role = effective_role(actor)
+        asset_type = asset.get("assetType", "design")
+        allowed_roles = (
+            {Role.ADMIN, Role.MARKETING, Role.ACCOUNTANT}
+            if asset_type == "payment_proof"
+            else {Role.ADMIN, Role.MARKETING, Role.DESIGNER, Role.TRANSPORT_MANAGER}
+        )
+        if role not in allowed_roles:
+            raise HTTPException(403, "This private file is not available for your role.")
         return {"url": storage.view_url(asset["objectKey"]), "expiresIn": 600}
 
     @application.post("/api/orders/{order_id}/design/review-link", dependencies=[Depends(require_csrf)])
@@ -392,7 +541,7 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         require_storage()
         order_document = repository.get_order(order_id)
         asset = repository.get_asset(payload.assetId)
-        if not order_document or not asset or asset["orderId"] != order_id or asset["status"] != "available":
+        if not order_document or not asset or asset.get("assetType", "design") != "design" or asset["orderId"] != order_id or asset["status"] != "available":
             raise HTTPException(422, "Choose an available design version.")
         repository.revoke_reviews(order_id)
         raw_token = secrets.token_urlsafe(32)
@@ -454,7 +603,9 @@ def create_app(settings_override: Settings | None = None, repository_override: M
 
     @application.get("/api/cron/cleanup")
     def cleanup(authorization: str | None = Header(default=None)):
-        if not settings.cron_secret or authorization != f"Bearer {settings.cron_secret}":
+        if not settings.cron_ready:
+            raise HTTPException(503, "Cleanup authentication is not configured on the server.")
+        if authorization != f"Bearer {settings.cron_secret}":
             raise HTTPException(401, "Invalid cleanup authorization.")
         require_storage()
         repo()

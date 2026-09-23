@@ -13,17 +13,21 @@ import {
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowDownUp,
   Bell,
   Building2,
   CheckCircle2,
   ChevronRight,
   Clipboard,
   ClipboardList,
+  Download,
   Eye,
   Factory,
   HelpCircle,
   ImagePlus,
   LayoutDashboard,
+  LayoutGrid,
+  List,
   LoaderCircle,
   LockKeyhole,
   LogOut,
@@ -155,6 +159,12 @@ const activeOrderStages = (order: Order) =>
       order.stages[stage].status,
     ),
   );
+const taskStagesForRole = (role: Role) => {
+  const operating = operatingRole(role);
+  return productionStages.filter(
+    (stage) => stageInfo[stage].role === operating,
+  );
+};
 const date = (value?: string) =>
   value
     ? new Intl.DateTimeFormat("en-IN", {
@@ -196,15 +206,15 @@ function ServiceScreen({
   retry: () => void;
 }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-slate-50 p-4">
-      <section className="surface max-w-md p-6 text-center">
+    <main className="flex min-h-screen w-full max-w-full items-center justify-center overflow-x-clip bg-slate-50 p-4">
+      <section className="surface w-full min-w-0 max-w-md p-5 text-center sm:p-6">
         <span className="mx-auto grid size-14 place-items-center rounded-full bg-amber-100 text-amber-700">
           <AlertTriangle />
         </span>
         <h1 className="mt-4 text-xl font-bold text-navy-900">
           Service temporarily unavailable
         </h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
+        <p className="mt-2 break-words text-sm leading-6 text-slate-600">{message}</p>
         <button className="primary-button mt-5 w-full" onClick={retry}>
           <RefreshCw className="size-4" />
           Try again
@@ -445,13 +455,14 @@ function Shell({ children }: { children: ReactNode }) {
     localStorage.setItem("pb-language", next);
   };
   return (
-    <div className="min-h-screen bg-[#f4f7fb] pb-20 md:pb-0">
+    <div className="app-shell min-h-screen w-full min-w-0 bg-[#f4f7fb] pb-24 md:pb-0">
       <ToastHost />
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-navy-900 p-4 text-white md:flex">
-        <Link to="/" className="min-h-14">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-68 flex-col border-r border-white/10 bg-navy-900 px-3 py-4 text-white md:flex">
+        <Link to="/" className="flex min-h-14 items-center rounded-xl px-1 focus-visible:outline-white">
           <Brand light />
         </Link>
-        <nav className="mt-8 space-y-1">
+        <nav className="mt-8 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" aria-label="Primary navigation">
+          <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-[.14em] text-slate-500">Workspace</p>
           {visibleNav
             .filter((item) => item.to !== "/more")
             .map(({ to, label, mr, icon: Icon }) => (
@@ -460,7 +471,7 @@ function Shell({ children }: { children: ReactNode }) {
                 to={to}
                 end={to === "/"}
                 className={({ isActive }) =>
-                  `flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${isActive ? "bg-white text-navy-900" : "text-slate-300 hover:bg-white/10 hover:text-white"}`
+                  `flex min-h-12 items-center gap-3 rounded-xl border px-3 text-sm font-semibold transition ${isActive ? "border-white/15 bg-white text-navy-900 shadow-sm" : "border-transparent text-slate-300 hover:bg-white/10 hover:text-white"}`
                 }
               >
                 <Icon className="size-5" />
@@ -468,7 +479,7 @@ function Shell({ children }: { children: ReactNode }) {
               </NavLink>
             ))}
         </nav>
-        <div className="mt-auto rounded-xl bg-white/10 p-3">
+        <div className="mt-4 rounded-xl border border-white/10 bg-white/[.07] p-3">
           <div className="flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded-full bg-sky-500 font-bold">
               {currentUser.initials}
@@ -481,7 +492,7 @@ function Shell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <button
-            className="mt-3 min-h-11 w-full rounded-lg text-left text-sm font-semibold text-slate-300 hover:bg-white/10"
+            className="mt-3 min-h-11 w-full rounded-lg px-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
             onClick={toggleLanguage}
           >
             {lang === "en" ? "मराठीमध्ये पहा" : "View in English"}
@@ -495,8 +506,8 @@ function Shell({ children }: { children: ReactNode }) {
           </button>
         </div>
       </aside>
-      <div className="md:pl-64">
-        <header className="sticky top-0 z-20 flex min-h-16 items-center border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:px-7">
+      <div className="min-w-0 w-full pt-16 md:pl-68 md:pt-0">
+        <header className="fixed inset-x-0 top-0 z-20 flex min-h-16 items-center border-b border-slate-200 bg-white/95 px-4 shadow-[0_1px_0_rgba(15,23,42,.02)] backdrop-blur md:sticky md:px-7">
           <button
             className="grid size-11 place-items-center rounded-xl border border-slate-200 md:hidden"
             onClick={() => setDrawer(true)}
@@ -504,8 +515,8 @@ function Shell({ children }: { children: ReactNode }) {
           >
             <Menu />
           </button>
-          <div className="hidden md:block">
-            <p className="text-xs font-semibold text-slate-500">
+          <div className="hidden min-w-0 md:block">
+            <p className="text-xs font-semibold tracking-wide text-slate-500">
               {currentUser.department}
             </p>
             <p className="font-bold text-navy-900">
@@ -516,7 +527,7 @@ function Shell({ children }: { children: ReactNode }) {
           </div>
           <Link
             to="/orders"
-            className="relative ml-auto grid size-11 place-items-center rounded-xl border border-slate-200"
+            className="relative ml-auto grid size-11 place-items-center rounded-xl border border-slate-200 text-navy-900 transition hover:border-slate-300 hover:bg-slate-50"
             aria-label={`${issues} alerts`}
           >
             <Bell className="size-5" />
@@ -525,18 +536,18 @@ function Shell({ children }: { children: ReactNode }) {
             )}
           </Link>
         </header>
-        <main className="mx-auto max-w-[1440px] p-4 md:p-7" id="main-content">
+        <main className="mx-auto w-full min-w-0 max-w-[1440px] p-4 md:p-7" id="main-content">
           {children}
         </main>
       </div>
-      <nav className={`fixed inset-x-0 bottom-0 z-30 grid ${isSimpleWorker ? "grid-cols-3" : "grid-cols-5"} border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_20px_rgba(15,23,42,.08)] md:hidden`}>
+      <nav className={`fixed inset-x-0 bottom-0 z-30 grid ${isSimpleWorker ? "grid-cols-3" : "grid-cols-5"} border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_20px_rgba(15,23,42,.08)] md:hidden`} aria-label="Mobile navigation">
         {mobileNav.slice(0, isSimpleWorker ? 2 : 4).map(({ to, label, mr, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === "/"}
             className={({ isActive }) =>
-              `flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-bold ${isActive ? "text-brand" : "text-slate-500"}`
+              `flex min-h-16 flex-col items-center justify-center gap-1 border-t-2 text-[11px] font-bold transition ${isActive ? "border-brand bg-orange-50/50 text-brand" : "border-transparent text-slate-500"}`
             }
           >
             <Icon className="size-5" />
@@ -546,7 +557,7 @@ function Shell({ children }: { children: ReactNode }) {
         <NavLink
           to="/more"
           className={({ isActive }) =>
-            `flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-bold ${isActive ? "text-brand" : "text-slate-500"}`
+            `flex min-h-16 flex-col items-center justify-center gap-1 border-t-2 text-[11px] font-bold transition ${isActive ? "border-brand bg-orange-50/50 text-brand" : "border-transparent text-slate-500"}`
           }
         >
           <Menu className="size-5" />
@@ -559,7 +570,7 @@ function Shell({ children }: { children: ReactNode }) {
           onClick={() => setDrawer(false)}
         >
           <aside
-            className="h-full w-[86%] max-w-xs bg-white p-4"
+            className="flex h-full w-[86%] max-w-xs flex-col bg-white p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -571,13 +582,15 @@ function Shell({ children }: { children: ReactNode }) {
                 <X />
               </button>
             </div>
-            <nav className="mt-6 space-y-2">
+            <nav className="mt-6 flex-1 space-y-2 overflow-y-auto" aria-label="Mobile menu">
               {visibleNav.map(({ to, label, mr, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={to}
                   onClick={() => setDrawer(false)}
-                  className="flex min-h-12 items-center gap-3 rounded-xl bg-slate-50 px-3 font-semibold"
+                  className={({ isActive }) =>
+                    `flex min-h-12 items-center gap-3 rounded-xl border px-3 font-semibold transition ${isActive ? "border-sky-200 bg-sky-50 text-navy-900" : "border-transparent bg-slate-50 text-slate-700 hover:bg-slate-100"}`
+                  }
                 >
                   <Icon className="size-5" />
                   {lang === "mr" ? mr : label}
@@ -627,15 +640,15 @@ function Heading({
   action?: ReactNode;
 }) {
   return (
-    <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
+    <header className="mb-6 flex flex-wrap items-start justify-between gap-4 sm:items-end">
+      <div className="w-full min-w-0 sm:w-auto sm:flex-1">
         <p className="eyebrow">{eyebrow}</p>
         <h1 className="page-title mt-1">{title}</h1>
-        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+        <p className="page-copy mt-1 max-w-2xl text-sm leading-6 text-slate-600">
           {description}
         </p>
       </div>
-      {action}
+      {action && <div className="w-full shrink-0 sm:w-auto">{action}</div>}
     </header>
   );
 }
@@ -663,28 +676,15 @@ function Empty({
 }
 
 function DashboardPage() {
-  const { currentUser, orders } = useApp();
+  const { currentUser, orders, customers } = useApp();
   if (!currentUser) return null;
-  if (currentUser.role !== "admin")
+  const canManageOrders = ["admin", "marketing"].includes(currentUser.role);
+  if (!canManageOrders)
     return <WorkerHome />;
-  const relevant = Object.entries(stageInfo).find(
-    ([, info]) => info.role === operatingRole(currentUser.role),
-  )?.[0] as StageKey | undefined;
-  const myQueue =
-    currentUser.role === "admin"
-      ? orders
-      : orders.filter(
-          (order) =>
-            relevant &&
-            ["ready", "in_progress", "blocked", "issue"].includes(
-              order.stages[relevant].status,
-            ),
-        );
-  const issues = orders.filter((order) =>
-    Object.values(order.stages).some((state) =>
-      ["blocked", "issue"].includes(state.status),
-    ),
-  ).length;
+  const ordersInQueue = orders.filter(
+    (order) => order.status === "active" && activeOrderStages(order).length > 0,
+  );
+  const completedOrders = orders.filter((order) => order.status === "completed");
   const liveDepartments = productionStages.filter((stage) =>
     orders.some((order) => activeOrderStages(order).includes(stage)),
   );
@@ -695,11 +695,11 @@ function DashboardPage() {
         title={
           currentUser.role === "admin"
             ? "Production at a glance"
-            : `${currentUser.department} workspace`
+            : "Orders and customer activity"
         }
         description="Urgent work appears first. Open an order to see exactly what happened and what should happen next."
         action={
-          currentUser.role === "admin" ? (
+          canManageOrders ? (
             <Link className="primary-button" to="/orders/new">
               <Plus className="size-4" />
               Create order
@@ -707,39 +707,38 @@ function DashboardPage() {
           ) : undefined
         }
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Total orders" value={orders.length} />
-        <Kpi
-          label="Active"
-          value={orders.filter((o) => o.status === "active").length}
-        />
-        <Kpi label="Need attention" value={issues} danger={issues > 0} />
-        <Kpi label="My queue" value={myQueue.length} />
-      </div>
+      <section aria-label="Order overview" className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 lg:grid-cols-4">
+        <Kpi label="Total customers" value={customers.length} to="/customers" />
+        <Kpi label="Total orders" value={orders.length} to="/orders" />
+        <Kpi label="Completed orders" value={completedOrders.length} to="/orders?status=completed" />
+        <Kpi label="Orders in queue" value={ordersInQueue.length} to="/orders?status=active" />
+      </section>
       {currentUser.role === "admin" && (
-        <section className="surface mt-5 p-4">
-          <div className="flex items-end justify-between gap-3">
-            <div>
+        <section className="surface mt-5 p-4 sm:p-5">
+          <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2">
+            <div className="min-w-0">
               <h2 className="text-lg font-bold text-navy-900">Live work by department</h2>
-              <p className="text-sm text-slate-500">Open a department to see the orders waiting there.</p>
+              <p className="mt-1 text-sm leading-5 text-slate-500">Open a department to see the orders waiting there.</p>
             </div>
-            <Link className="text-sm font-bold text-brand" to="/orders">All orders</Link>
+            <Link className="shrink-0 text-sm font-bold text-brand hover:text-brand-dark" to="/orders">View all orders</Link>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {liveDepartments.map((stage) => {
               const count = orders.filter((order) => activeOrderStages(order).includes(stage)).length;
               const visual = roleVisuals[stageInfo[stage].role];
               const DepartmentIcon = visual.icon;
               return (
-                <Link key={stage} to={`/orders?stage=${stage}`} className="rounded-xl border border-slate-200 p-3 transition hover:border-sky-400 hover:bg-sky-50">
+                <Link key={stage} to={`/orders?stage=${stage}`} className="group rounded-xl border border-slate-200 bg-slate-50/60 p-3 transition hover:border-sky-300 hover:bg-sky-50 focus:bg-sky-50">
                   <div className="flex items-center gap-2">
                     <span className={`grid size-8 place-items-center rounded-lg ${visual.soft} ${visual.color}`}>
                       <DepartmentIcon className="size-4" aria-hidden="true" />
                     </span>
                     <p className="text-sm font-bold text-navy-900">{stageInfo[stage].short}</p>
                   </div>
-                  <p className="mt-2 text-sm text-slate-500">{roleLabels[stageInfo[stage].role]}</p>
-                  <p className="mt-2 text-xl font-extrabold text-brand">{count}</p>
+                  <div className="mt-3 flex items-end justify-between gap-2">
+                    <p className="text-xs leading-4 text-slate-500">{roleLabels[stageInfo[stage].role]}</p>
+                    <p className="text-xl font-extrabold tabular-nums text-brand">{count}</p>
+                  </div>
                 </Link>
               );
             })}
@@ -747,32 +746,30 @@ function DashboardPage() {
           </div>
         </section>
       )}
-      <section className="mt-5">
-        <div className="mb-3 flex items-end justify-between">
-          <div>
+      <section className="mt-7">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-x-5 gap-y-2">
+          <div className="min-w-0">
             <h2 className="text-lg font-bold text-navy-900">
-              {currentUser.role === "admin"
-                ? "Recently updated orders"
-                : "Work waiting for me"}
+              Orders currently in queue
             </h2>
-            <p className="text-sm text-slate-500">
+            <p className="mt-1 text-sm leading-5 text-slate-500">
               Only real records from Atlas appear here.
             </p>
           </div>
-          <Link className="text-sm font-bold text-brand" to="/queue">
-            Open queue
+          <Link className="shrink-0 text-sm font-bold text-brand hover:text-brand-dark" to="/orders?status=active">
+            View all orders
           </Link>
         </div>
         <div className="grid gap-3 xl:grid-cols-2">
-          {myQueue.slice(0, 6).map((order) => (
+          {ordersInQueue.slice(0, 6).map((order) => (
             <OrderCard key={order.id} order={order} />
           ))}
-          {myQueue.length === 0 && (
+          {ordersInQueue.length === 0 && (
             <Empty
-              title={orders.length ? "Your queue is clear" : "No orders yet"}
+              title={orders.length ? "No orders are in queue" : "No orders yet"}
               text={
                 orders.length
-                  ? "There is no work waiting for your department."
+                  ? "All current orders have been completed or closed."
                   : "Create the first customer and order to begin practical testing."
               }
               action={
@@ -795,17 +792,17 @@ function DashboardPage() {
 function WorkerHome() {
   const { currentUser, orders } = useApp();
   if (!currentUser) return null;
-  const myStage = Object.entries(stageInfo).find(
-    ([, info]) => info.role === operatingRole(currentUser.role),
-  )?.[0] as StageKey | undefined;
-  const tasks = myStage
-    ? orders.filter((order) =>
-        ["ready", "in_progress", "blocked", "issue"].includes(
-          order.stages[myStage].status,
-        ),
-      )
-    : [];
+  const myStages = taskStagesForRole(currentUser.role);
+  const tasks = orders.filter((order) =>
+    myStages.some((stage) => ["ready", "in_progress", "blocked", "issue"].includes(order.stages[stage].status)),
+  );
   const firstTask = tasks[0];
+  const firstTaskStage = firstTask
+    ? myStages.find((stage) => activeOrderStages(firstTask).includes(stage))
+    : undefined;
+  const materialShortages = currentUser.role === "marketing"
+    ? orders.filter((order) => ["blocked", "issue"].includes(order.stages.material.status))
+    : [];
   return (
     <>
       <Heading
@@ -813,13 +810,20 @@ function WorkerHome() {
         title={`Hello, ${currentUser.name.split(" ")[0]}`}
         description="Open the first task, complete your part, then the next team is informed automatically."
       />
+      {materialShortages.length > 0 && (
+        <section className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="font-bold text-amber-950">Material availability needs attention</p>
+          <p className="mt-1 text-sm text-amber-900">{materialShortages.length} order{materialShortages.length === 1 ? " has" : "s have"} material marked unavailable. Please coordinate with Admin.</p>
+          <Link className="secondary-button mt-3 !border-amber-300 !bg-white !text-amber-900" to={`/orders/${materialShortages[0].id}`}>Open affected order</Link>
+        </section>
+      )}
       {firstTask ? (
         <section className="rounded-2xl bg-navy-900 p-5 text-white shadow-lg">
           <p className="text-sm font-semibold text-sky-200">Your next task</p>
-          <h2 className="mt-2 text-2xl font-extrabold">{stageInfo[myStage!].label}</h2>
+          <h2 className="mt-2 text-2xl font-extrabold">{stageInfo[firstTaskStage!].label}</h2>
           <p className="mt-3 text-base text-slate-200">{firstTask.orderNumber} · {firstTask.customer}</p>
           <p className="mt-1 text-sm text-slate-300">{firstTask.product} · {firstTask.quantity.toLocaleString("en-IN")} bags</p>
-          <Link className="primary-button mt-5" to={`/orders/${firstTask.id}?stage=${myStage}`}>
+          <Link className="primary-button mt-5" to={`/orders/${firstTask.id}?stage=${firstTaskStage}`}>
             Open my task
             <ChevronRight className="size-4" />
           </Link>
@@ -837,12 +841,15 @@ function WorkerHome() {
             <Link className="text-sm font-bold text-brand" to="/queue">View all</Link>
           </div>
           <div className="grid gap-3">
-            {tasks.slice(1, 4).map((order) => (
-              <Link key={order.id} to={`/orders/${order.id}?stage=${myStage}`} className="surface flex min-h-16 items-center justify-between p-4">
+            {tasks.slice(1, 4).map((order) => {
+              const taskStage = myStages.find((stage) => activeOrderStages(order).includes(stage));
+              return (
+              <Link key={order.id} to={`/orders/${order.id}?stage=${taskStage}`} className="surface flex min-h-16 items-center justify-between p-4">
                 <span><strong className="block">{order.orderNumber}</strong><span className="text-sm text-slate-500">{order.customer}</span></span>
                 <ChevronRight className="size-5 text-slate-400" />
               </Link>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
@@ -853,14 +860,16 @@ function Kpi({
   label,
   value,
   danger = false,
+  to,
 }: {
   label: string;
   value: number;
   danger?: boolean;
+  to?: string;
 }) {
-  return (
-    <div className="surface p-4">
-      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+  const content = (
+    <>
+      <p className="text-xs font-bold uppercase leading-4 tracking-wide text-slate-500">
         {label}
       </p>
       <p
@@ -868,6 +877,22 @@ function Kpi({
       >
         {value}
       </p>
+      {to && <p className="mt-2 text-xs font-semibold text-brand">Open list</p>}
+    </>
+  );
+  if (to)
+    return (
+      <Link
+        className="surface block p-4 transition hover:border-sky-300 hover:bg-sky-50 focus:bg-sky-50"
+        to={to}
+        aria-label={`Open ${label.toLowerCase()} list`}
+      >
+        <div className="flex min-h-[92px] flex-col justify-between">{content}</div>
+      </Link>
+    );
+  return (
+    <div className="surface p-4">
+      <div className="flex min-h-[92px] flex-col justify-between">{content}</div>
     </div>
   );
 }
@@ -893,7 +918,7 @@ function SearchField({
       <Search aria-hidden="true" />
       <input
         id={id}
-        className="field pr-12"
+        className="field field-with-leading-icon field-with-trailing-action"
         type="search"
         placeholder={placeholder}
         value={value}
@@ -913,6 +938,39 @@ function SearchField({
   );
 }
 
+function BookingDateControls({
+  dateFrom,
+  dateTo,
+  bookingMonth,
+  setDateFrom,
+  setDateTo,
+  setBookingMonth,
+  showLastMonths,
+}: {
+  dateFrom: string;
+  dateTo: string;
+  bookingMonth: string;
+  setDateFrom: (value: string) => void;
+  setDateTo: (value: string) => void;
+  setBookingMonth: (value: string) => void;
+  showLastMonths: (months: number) => void;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[150px_150px_170px_auto] lg:items-end lg:justify-start">
+      <label className="block min-w-0 text-sm font-semibold text-slate-700">From
+        <input className="field mt-1 min-h-11 w-full" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setBookingMonth(""); }} />
+      </label>
+      <label className="block min-w-0 text-sm font-semibold text-slate-700">To
+        <input className="field mt-1 min-h-11 w-full" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setBookingMonth(""); }} />
+      </label>
+      <label className="block min-w-0 text-sm font-semibold text-slate-700">Choose a month
+        <input className="field mt-1 min-h-11 w-full" type="month" value={bookingMonth} onChange={(event) => { setBookingMonth(event.target.value); setDateFrom(""); setDateTo(""); }} />
+      </label>
+      <button type="button" className="secondary-button min-h-11" onClick={() => showLastMonths(3)}>Last 3 months</button>
+    </div>
+  );
+}
+
 function OrdersPage({ queue = false }: { queue?: boolean }) {
   const { orders, currentUser } = useApp();
   const [searchParams] = useSearchParams();
@@ -921,34 +979,92 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
     const value = searchParams.get("stage");
     return value && value in stageInfo ? (value as StageKey) : "all";
   });
-  const relevant = currentUser
-    ? (Object.entries(stageInfo).find(
-      ([, info]) => info.role === operatingRole(currentUser.role),
-    )?.[0] as StageKey | undefined)
-    : undefined;
-  const isAdmin = currentUser?.role === "admin";
+  const [orderStatus, setOrderStatus] = useState<"all" | "active" | "completed">(() => {
+    const value = searchParams.get("status");
+    return value === "active" || value === "completed" ? value : "all";
+  });
+  const [sortBy, setSortBy] = useState<"delivery_date" | "delivery_month" | "customer_az" | "order_number">("delivery_date");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [bookingMonth, setBookingMonth] = useState("");
+  const workerStages = currentUser ? taskStagesForRole(currentUser.role) : [];
+  const [workerStage, setWorkerStage] = useState<StageKey | "all">(() => {
+    const value = searchParams.get("stage") as StageKey | null;
+    return value && currentUser && taskStagesForRole(currentUser.role).includes(value)
+      ? value
+      : workerStages.length > 1
+        ? workerStages[0]
+        : "all";
+  });
+  const canViewOrderRegister = ["admin", "marketing"].includes(
+    currentUser?.role ?? "",
+  );
   const canBookOrders = ["admin", "marketing"].includes(
     currentUser?.role ?? "",
   );
-  const source = !isAdmin
-    ? orders.filter((order) => relevant && activeOrderStages(order).includes(relevant))
+  const calendarDate = (value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const showLastMonths = (months: number) => {
+    const today = new Date();
+    const from = new Date(today);
+    from.setMonth(from.getMonth() - months);
+    setDateFrom(calendarDate(from));
+    setDateTo(calendarDate(today));
+    setBookingMonth("");
+  };
+  const clearDateFilter = () => {
+    setDateFrom("");
+    setDateTo("");
+    setBookingMonth("");
+  };
+  const dateFilterActive = Boolean(dateFrom || dateTo || bookingMonth);
+  const source = !canViewOrderRegister
+    ? orders.filter((order) => workerStages.some((task) => activeOrderStages(order).includes(task)))
     : orders;
-  const result = source.filter(
-    (order) =>
+  const result = source
+    .filter(
+      (order) =>
       `${order.orderNumber} ${order.customer} ${order.product} ${order.phone}`
         .toLowerCase()
         .includes(search.toLowerCase()) &&
-      (stage === "all" || activeOrderStages(order).includes(stage)),
-  );
+      (orderStatus === "all" || order.status === orderStatus) &&
+      (!canViewOrderRegister || (() => {
+        const bookedOn = order.orderDate.slice(0, 10);
+        return (!dateFrom || bookedOn >= dateFrom) &&
+          (!dateTo || bookedOn <= dateTo) &&
+          (!bookingMonth || bookedOn.startsWith(bookingMonth));
+      })()) &&
+      (canViewOrderRegister
+        ? stage === "all" || activeOrderStages(order).includes(stage)
+        : workerStage === "all" || activeOrderStages(order).includes(workerStage)),
+    )
+    .sort((first, second) => {
+      if (sortBy === "customer_az")
+        return first.customer.localeCompare(second.customer, "en", { sensitivity: "base" });
+      const firstDate = new Date(first.expectedDelivery).getTime();
+      const secondDate = new Date(second.expectedDelivery).getTime();
+      if (sortBy === "delivery_month") {
+        const firstMonth = new Date(first.expectedDelivery).getMonth();
+        const secondMonth = new Date(second.expectedDelivery).getMonth();
+        return firstMonth - secondMonth || firstDate - secondDate;
+      }
+      if (sortBy === "order_number")
+        return second.orderNumber.localeCompare(first.orderNumber, undefined, { numeric: true });
+      return firstDate - secondDate;
+    });
   return (
     <>
       <Heading
-        eyebrow={isAdmin ? "Order register" : "My work"}
-        title={isAdmin ? "Orders" : `${roleLabels[operatingRole(currentUser!.role)]} work`}
+        eyebrow={canViewOrderRegister ? "Order register" : "My work"}
+        title={canViewOrderRegister ? "Orders" : workerStage === "all" ? `${roleLabels[operatingRole(currentUser!.role)]} work` : `${stageInfo[workerStage].short} list`}
         description={
-          isAdmin
+          canViewOrderRegister
             ? "Search by customer name and see which department is working on every order."
-            : "Only orders waiting for your department are shown here."
+            : workerStage === "all" ? "Only your pending tasks are shown here." : `Only orders pending for ${stageInfo[workerStage].short} are shown here.`
         }
         action={
           !queue &&
@@ -960,38 +1076,109 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
           ) : undefined
         }
       />
-      <section className="surface mb-4 p-3">
+      <section className="mb-4 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-[0_1px_3px_rgba(15,23,42,.04)] sm:px-4">
         <SearchField
           id="order-search"
           label="Search orders"
-          placeholder={isAdmin ? "Search order number, customer name, product or phone…" : "Search your order by customer or order number…"}
+          placeholder={canViewOrderRegister ? "Search order number, customer name, product or phone…" : "Search your order by customer or order number…"}
           value={search}
           onChange={setSearch}
         />
-        {isAdmin ? <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="Filter orders by current department">
-          <button className={`min-h-11 shrink-0 rounded-lg px-3 text-sm font-bold ${stage === "all" ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-700"}`} onClick={() => setStage("all")}>
-            All ({source.length})
-          </button>
-          {productionStages.map((key) => {
-            const count = source.filter((order) => activeOrderStages(order).includes(key)).length;
-            return (
-              <button
-                className={`min-h-11 shrink-0 rounded-lg px-3 text-sm font-bold ${stage === key ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-700"}`}
-                key={key}
-                onClick={() => setStage(key)}
-              >
-                {stageInfo[key].short} ({count})
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+          <p className="text-sm font-semibold text-slate-700">Filter and sort orders</p>
+          <label className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-700 sm:w-auto sm:min-w-72">
+            <ArrowDownUp className="size-4 text-slate-500" aria-hidden="true" />
+            <span className="sr-only">Sort orders</span>
+            <select
+              className="min-h-9 min-w-0 flex-1 bg-transparent pr-7 text-sm font-semibold text-slate-700 outline-none sm:max-w-56"
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+              aria-label="Sort orders"
+            >
+              <option value="delivery_date">Delivery date: earliest first</option>
+              <option value="delivery_month">Delivery month: January to December</option>
+              <option value="customer_az">Customer name: A to Z</option>
+              <option value="order_number">Order number: highest first</option>
+            </select>
+          </label>
+        </div>
+        {canViewOrderRegister ? <>
+          <details className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 md:hidden">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-3 font-bold text-navy-900">
+              <span>Filter by booking date</span>
+              <span className="text-xs font-semibold text-slate-500">{dateFilterActive ? "Filter applied" : "Optional"}</span>
+            </summary>
+            <div className="border-t border-slate-200 p-3">
+              <p className="mb-3 text-xs leading-5 text-slate-600">Choose a month, a custom range, or the last 3 months.</p>
+              <BookingDateControls dateFrom={dateFrom} dateTo={dateTo} bookingMonth={bookingMonth} setDateFrom={setDateFrom} setDateTo={setDateTo} setBookingMonth={setBookingMonth} showLastMonths={showLastMonths} />
+              {dateFilterActive && <button type="button" className="mt-3 text-sm font-bold text-brand hover:underline" onClick={clearDateFilter}>Clear dates</button>}
+            </div>
+          </details>
+          <div className="mt-3 hidden border-t border-slate-100 pt-3 md:block">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-bold text-navy-900">Order booking date</p>
+                <p className="mt-0.5 text-xs text-slate-500">Choose a month or a custom date range to view older orders.</p>
+              </div>
+              {dateFilterActive && <button type="button" className="text-sm font-bold text-brand hover:underline" onClick={clearDateFilter}>Clear dates</button>}
+            </div>
+            <div className="mt-2"><BookingDateControls dateFrom={dateFrom} dateTo={dateTo} bookingMonth={bookingMonth} setDateFrom={setDateFrom} setDateTo={setDateTo} setBookingMonth={setBookingMonth} showLastMonths={showLastMonths} /></div>
+          </div>
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Order status</p>
+            <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label="Filter orders by status">
+            {([
+              ["all", "All orders"],
+              ["active", "In queue"],
+              ["completed", "Completed"],
+            ] as const).map(([value, label]) => (
+              <button className={`min-h-10 shrink-0 rounded-lg px-3 text-sm font-bold transition ${orderStatus === value ? "bg-navy-900 text-white shadow-sm" : "text-slate-600 hover:bg-white hover:text-navy-900"}`} key={value} onClick={() => { setOrderStatus(value); if (value !== "all") setStage("all"); }}>
+                {label} ({value === "all" ? source.length : source.filter((order) => order.status === value).length})
               </button>
-            );
-          })}
-        </div> : <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900">Showing {source.length} order{source.length === 1 ? "" : "s"} for {roleLabels[operatingRole(currentUser!.role)]}.</p>}
+            ))}
+          </div>
+          </div>
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Current department</p>
+              <p className="text-xs text-slate-500">Scroll for more</p>
+            </div>
+            <div className="filter-scroll flex max-w-full gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1.5" aria-label="Filter orders by current department">
+            <button className={`min-h-10 shrink-0 rounded-lg px-3 text-sm font-bold transition ${stage === "all" ? "bg-navy-900 text-white shadow-sm" : "text-slate-600 hover:bg-white hover:text-navy-900"}`} onClick={() => setStage("all")}>
+              All departments
+            </button>
+            {productionStages.map((key) => {
+              const count = source.filter((order) => activeOrderStages(order).includes(key)).length;
+              return (
+                <button
+                  className={`min-h-10 shrink-0 rounded-lg px-3 text-sm font-bold transition ${stage === key ? "bg-navy-900 text-white shadow-sm" : "text-slate-600 hover:bg-white hover:text-navy-900"}`}
+                  key={key}
+                  onClick={() => { setStage(key); setOrderStatus("active"); }}
+                >
+                  {stageInfo[key].short} ({count})
+                </button>
+              );
+            })}
+          </div>
+          </div>
+        </> : <>
+          {workerStages.length > 1 && (
+            <div className="filter-scroll mt-3 flex gap-2 overflow-x-auto pb-2" aria-label="Choose your task list">
+              {workerStages.map((task) => {
+                const count = source.filter((order) => activeOrderStages(order).includes(task)).length;
+                return <button className={`min-h-11 shrink-0 rounded-lg px-3 text-sm font-bold ${workerStage === task ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-700"}`} key={task} onClick={() => setWorkerStage(task)}>{stageInfo[task].short} ({count})</button>;
+              })}
+            </div>
+          )}
+          <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900">Showing {result.length} pending order{result.length === 1 ? "" : "s"} for {workerStage === "all" ? roleLabels[operatingRole(currentUser!.role)] : stageInfo[workerStage].label}.</p>
+        </>}
       </section>
-      <section className="surface overflow-hidden">
-        <div className="hidden grid-cols-[170px_minmax(260px,1.7fr)_minmax(240px,1.2fr)_130px_80px] gap-5 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 xl:grid">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,.04)]">
+        <div className="hidden grid-cols-[minmax(130px,.8fr)_minmax(220px,1.8fr)_minmax(180px,1.2fr)_minmax(110px,.7fr)_72px] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 xl:grid">
           <span>Order</span><span>Customer & bag</span><span>Current work</span><span>Due date</span><span>Action</span>
         </div>
         {result.map((order) => (
-          <OrderListRow key={order.id} order={order} assignedStage={isAdmin ? undefined : relevant} />
+          <OrderListRow key={order.id} order={order} visibleStages={canViewOrderRegister ? undefined : workerStage === "all" ? workerStages : [workerStage]} />
         ))}
         {result.length === 0 && (
           <Empty
@@ -1008,16 +1195,19 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
   );
 }
 
-function OrderListRow({ order, assignedStage }: { order: Order; assignedStage?: StageKey }) {
+function OrderListRow({ order, visibleStages }: { order: Order; visibleStages?: StageKey[] }) {
   const liveStages = activeOrderStages(order);
-  const displayedStages = assignedStage ? liveStages.filter((stage) => stage === assignedStage) : liveStages;
+  const displayedStages = visibleStages ? liveStages.filter((stage) => visibleStages.includes(stage)) : liveStages;
+  const preferredStage = displayedStages[0];
   const activeLabel = displayedStages.length === 1
-    ? `${stageInfo[displayedStages[0]].short} is ready`
-    : `${displayedStages.length} tasks are ready`;
+    ? order.stages[displayedStages[0]].status === "blocked" || order.stages[displayedStages[0]].status === "issue"
+      ? `${stageInfo[displayedStages[0]].short} needs attention`
+      : `${stageInfo[displayedStages[0]].short} pending`
+    : `${displayedStages.length} tasks pending`;
   return (
     <Link
-      to={`/orders/${order.id}${assignedStage ? `?stage=${assignedStage}` : ""}`}
-      className="group block border-b-2 border-slate-100 px-4 py-3 transition hover:bg-sky-50 focus:bg-sky-50 xl:grid xl:min-h-24 xl:grid-cols-[170px_minmax(260px,1.7fr)_minmax(240px,1.2fr)_130px_80px] xl:items-center xl:gap-5 xl:px-5 xl:py-4"
+      to={`/orders/${order.id}${preferredStage ? `?stage=${preferredStage}` : ""}`}
+      className="group block border-b border-slate-200 px-4 py-4 transition hover:bg-sky-50/60 focus:bg-sky-50 xl:grid xl:min-h-22 xl:grid-cols-[minmax(130px,.8fr)_minmax(220px,1.8fr)_minmax(180px,1.2fr)_minmax(110px,.7fr)_72px] xl:items-center xl:gap-4 xl:px-5 xl:py-3.5"
     >
       <div className="xl:hidden">
         <div className="flex items-start justify-between gap-3">
@@ -1046,16 +1236,17 @@ function OrderListRow({ order, assignedStage }: { order: Order; assignedStage?: 
             <p className="text-xs font-semibold text-slate-700">{date(order.expectedDelivery)}</p>
           </div>
         </div>
-        <div className="mt-2 flex min-w-0 items-center justify-between gap-3">
+        <div className="mt-3 min-w-0">
           <div className="min-w-0">
             <p className="truncate font-bold text-navy-900">{order.customer}</p>
             <p className="mt-0.5 truncate text-sm text-slate-600">
               {order.product} · {order.quantity.toLocaleString("en-IN")} bags
             </p>
           </div>
-          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-sky-50 text-brand" aria-label="Open order">
-            <ChevronRight className="size-5 transition group-hover:translate-x-0.5" aria-hidden="true" />
-          </span>
+        </div>
+        <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2.5">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Current work</p>
+          <p className="mt-1 text-sm font-bold text-navy-900">{activeLabel}</p>
         </div>
         {order.priority !== "normal" && (
           <div className="mt-2">
@@ -1064,9 +1255,9 @@ function OrderListRow({ order, assignedStage }: { order: Order; assignedStage?: 
             </span>
           </div>
         )}
-        {displayedStages.length === 0 && (
-          <p className="mt-2 text-xs text-slate-500">No work is waiting</p>
-        )}
+        <div className="mt-3 flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
+          <span className="inline-flex min-h-10 shrink-0 items-center gap-1 text-sm font-bold text-brand">Open <ChevronRight className="size-4 transition group-hover:translate-x-0.5" aria-hidden="true" /></span>
+        </div>
       </div>
       <div className="hidden xl:contents">
         <div>
@@ -1077,13 +1268,13 @@ function OrderListRow({ order, assignedStage }: { order: Order; assignedStage?: 
             </span>
           )}
         </div>
-        <div className="min-w-0 border-l border-slate-100 pl-5">
+        <div className="min-w-0">
           <p className="truncate font-bold text-navy-900">{order.customer}</p>
           <p className="mt-1 truncate text-sm text-slate-600">
             {order.product} · {order.quantity.toLocaleString("en-IN")} bags
           </p>
         </div>
-        <div className="border-l border-slate-100 pl-5">
+        <div>
           {displayedStages.length ? (
             <>
               <p className="text-sm font-bold text-navy-900">{activeLabel}</p>
@@ -1102,7 +1293,7 @@ function OrderListRow({ order, assignedStage }: { order: Order; assignedStage?: 
             <p className="text-sm text-slate-500">No work is waiting</p>
           )}
         </div>
-        <div className="border-l border-slate-100 pl-5">
+        <div>
           <p className="text-sm font-semibold text-slate-700">{date(order.expectedDelivery)}</p>
         </div>
         <span className="flex items-center gap-1 text-sm font-bold text-brand">
@@ -1166,17 +1357,26 @@ function OrderCard({ order }: { order: Order }) {
 
 function CustomersPage() {
   const { customers, currentUser, createCustomer, reload } = useApp();
+  const [searchParams] = useSearchParams();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [customerView, setCustomerView] = useState<"list" | "cards">("list");
+  const [customerStatus, setCustomerStatus] = useState<"all" | "active" | "inactive">(() => {
+    const value = searchParams.get("status");
+    return value === "active" || value === "inactive" ? value : "all";
+  });
   const permitted = ["admin", "marketing"].includes(currentUser?.role ?? "");
   const filtered = customers.filter((c) =>
     `${c.companyName} ${c.contactPerson} ${c.phone}`
       .toLowerCase()
-      .includes(search.toLowerCase()),
+      .includes(search.toLowerCase()) &&
+    (customerStatus === "all" ||
+      (customerStatus === "active" ? c.active : !c.active)),
   );
+  const activeCustomers = customers.filter((customer) => customer.active).length;
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
@@ -1187,6 +1387,8 @@ function CustomersPage() {
         companyName: String(form.get("companyName")),
         contactPerson: String(form.get("contactPerson")),
         phone: String(form.get("phone")),
+        alternativePhone: String(form.get("alternativePhone")) || undefined,
+        gstNumber: String(form.get("gstNumber")).trim().toUpperCase() || undefined,
         email: String(form.get("email")) || undefined,
         address: String(form.get("address")),
       };
@@ -1234,55 +1436,84 @@ function CustomersPage() {
           value={search}
           onChange={setSearch}
         />
+        <div className="filter-scroll mt-3 flex gap-2 overflow-x-auto pb-2" aria-label="Filter customers by status">
+          {([
+            ["all", "All customers", customers.length],
+            ["active", "Active customers", activeCustomers],
+            ["inactive", "Inactive customers", customers.length - activeCustomers],
+          ] as const).map(([status, label, count]) => (
+            <button
+              key={status}
+              className={`min-h-11 shrink-0 rounded-lg px-3 text-sm font-bold ${customerStatus === status ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-700"}`}
+              onClick={() => setCustomerStatus(status)}
+            >
+              {label} ({count})
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          <p className="text-sm font-semibold text-slate-600">
+            Showing {filtered.length} customer{filtered.length === 1 ? "" : "s"}
+          </p>
+          <div className="inline-flex rounded-xl border border-slate-300 bg-white p-1 shadow-sm" role="group" aria-label="Choose customer view">
+            <button
+              type="button"
+              className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold ${customerView === "list" ? "bg-navy-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+              onClick={() => setCustomerView("list")}
+              aria-pressed={customerView === "list"}
+            >
+              <List className="size-4" aria-hidden="true" />
+              List
+            </button>
+            <button
+              type="button"
+              className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold ${customerView === "cards" ? "bg-navy-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+              onClick={() => setCustomerView("cards")}
+              aria-pressed={customerView === "cards"}
+            >
+              <LayoutGrid className="size-4" aria-hidden="true" />
+              Cards
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((customer) => (
-          <article className="surface p-4" key={customer.id}>
-            <div className="flex items-start gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sky-50 font-bold text-sky-700">
-                {customer.companyName.slice(0, 2).toUpperCase()}
-              </span>
-              <div className="min-w-0">
-                <h2 className="truncate font-bold text-navy-900">
-                  {customer.companyName}
-                </h2>
-                <p className="text-sm text-slate-500">
-                  {customer.contactPerson}
-                </p>
+      {customerView === "list" ? (
+        <section className="surface overflow-hidden">
+          <div className={`hidden border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 ${permitted ? "md:grid md:grid-cols-[minmax(220px,1.5fr)_minmax(170px,1fr)_150px_135px_130px] md:gap-4" : "md:grid md:grid-cols-[minmax(240px,1.6fr)_minmax(180px,1fr)_160px_145px] md:gap-4"}`}>
+            <span>Customer</span><span>Contact person</span><span>Phone</span><span>Status</span>{permitted && <span>Action</span>}
+          </div>
+          {filtered.map((customer) => (
+            <article key={customer.id} className={`border-b border-slate-100 p-4 last:border-b-0 ${permitted ? "md:grid md:grid-cols-[minmax(220px,1.5fr)_minmax(170px,1fr)_150px_135px_130px] md:items-center md:gap-4 md:px-5" : "md:grid md:grid-cols-[minmax(240px,1.6fr)_minmax(180px,1fr)_160px_145px] md:items-center md:gap-4 md:px-5"}`}>
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-sky-50 text-sm font-bold text-sky-700">{customer.companyName.slice(0, 2).toUpperCase()}</span>
+                <div className="min-w-0"><h2 className="truncate font-bold text-navy-900">{permitted ? <Link className="hover:text-brand hover:underline" to={`/customers/${customer.id}`}>{customer.companyName}</Link> : customer.companyName}</h2><p className="mt-0.5 truncate text-sm text-slate-500 md:hidden">{customer.contactPerson} · {customer.phone}</p></div>
               </div>
-            </div>
-            <dl className="mt-4 space-y-2 text-sm">
-              <p>
-                <b className="text-slate-500">Phone:</b> {customer.phone}
-              </p>
-              <p className="truncate">
-                <b className="text-slate-500">Email:</b>{" "}
-                {customer.email || "Not provided"}
-              </p>
-              <p className="line-clamp-2">
-                <b className="text-slate-500">Address:</b> {customer.address}
-              </p>
-            </dl>
-            {permitted && (
-              <button
-                className="secondary-button mt-4 w-full"
-                onClick={() => {
-                  setEditing(customer);
-                  setOpen(true);
-                }}
-              >
-                Edit customer details
-              </button>
-            )}
-          </article>
-        ))}
-        {filtered.length === 0 && (
-          <Empty
-            title="No customers yet"
-            text="Add the first real customer before creating an order."
-          />
-        )}
-      </div>
+              <p className="mt-3 text-sm text-slate-700 md:mt-0">{customer.contactPerson}</p>
+              <p className="mt-1 text-sm text-slate-700 md:mt-0">{customer.phone}</p>
+              <span className={`mt-3 inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-bold md:mt-0 ${customer.active ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{customer.active ? "Active" : "Inactive"}</span>
+              {permitted && <div className="mt-3 flex gap-2 md:mt-0"><Link className="secondary-button flex-1 !min-h-10 !rounded-lg !px-3 !py-2 text-center text-sm" to={`/customers/${customer.id}`}>Profile</Link><button className="secondary-button flex-1 !min-h-10 !rounded-lg !px-3 !py-2 text-sm" onClick={() => { setEditing(customer); setOpen(true); }}>Edit</button></div>}
+            </article>
+          ))}
+          {filtered.length === 0 && <Empty title="No customers yet" text="Add the first real customer before creating an order." />}
+        </section>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((customer) => (
+            <article className="surface p-4" key={customer.id}>
+              <div className="flex items-start gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sky-50 font-bold text-sky-700">
+                  {customer.companyName.slice(0, 2).toUpperCase()}
+                </span>
+                <div className="min-w-0"><h2 className="truncate font-bold text-navy-900">{permitted ? <Link className="hover:text-brand hover:underline" to={`/customers/${customer.id}`}>{customer.companyName}</Link> : customer.companyName}</h2><p className="text-sm text-slate-500">{customer.contactPerson}</p></div>
+              </div>
+              <div className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${customer.active ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{customer.active ? "Active customer" : "Inactive customer"}</div>
+              <dl className="mt-4 space-y-2 text-sm"><p><b className="text-slate-500">Phone:</b> {customer.phone}</p><p className="truncate"><b className="text-slate-500">Email:</b> {customer.email || "Not provided"}</p><p className="line-clamp-2"><b className="text-slate-500">Address:</b> {customer.address}</p></dl>
+              {permitted && <div className="mt-4 grid grid-cols-2 gap-2"><Link className="secondary-button text-center" to={`/customers/${customer.id}`}>View profile</Link><button className="secondary-button" onClick={() => { setEditing(customer); setOpen(true); }}>Edit details</button></div>}
+            </article>
+          ))}
+          {filtered.length === 0 && <Empty title="No customers yet" text="Add the first real customer before creating an order." />}
+        </div>
+      )}
       {open && (
         <Modal
           title={editing ? "Edit customer" : "Add customer"}
@@ -1306,10 +1537,12 @@ function CustomersPage() {
             />
             <Field
               name="phone"
-              label="Phone number"
+              label="Primary phone number"
               defaultValue={editing?.phone}
               required
             />
+            <Field name="alternativePhone" label="Alternative phone number (optional)" defaultValue={editing?.alternativePhone} />
+            <Field name="gstNumber" label="GST number (optional)" defaultValue={editing?.gstNumber} />
             <Field
               name="email"
               label="Email (optional)"
@@ -1346,6 +1579,117 @@ function CustomersPage() {
   );
 }
 
+function downloadCustomerOrderSheet(customer: Customer, orders: Order[]) {
+  const safeCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const rows = [
+    ["Prabodhan WE Bag - Customer order history"],
+    ["Customer", customer.companyName],
+    ["Contact person", customer.contactPerson],
+    ["Primary phone", customer.phone],
+    ["Alternative phone", customer.alternativePhone ?? ""],
+    ["GST number", customer.gstNumber ?? ""],
+    ["Address", customer.address],
+    [],
+    ["Order number", "Order date", "Delivery date", "Bag type", "Size", "Printing colour", "Quantity", "Rate per bag", "Total amount", "Advance paid", "Due amount", "Order status", "Current department", "Notes"],
+    ...orders.map((order) => [
+      order.orderNumber,
+      date(order.orderDate),
+      date(order.expectedDelivery),
+      order.bagType ?? order.product,
+      order.bagSize ?? "",
+      order.printingColor ?? "",
+      order.quantity,
+      order.ratePerBag ?? "",
+      order.amount,
+      order.advancePaid ?? 0,
+      order.remainingAmount ?? Math.max(0, order.amount - (order.advancePaid ?? 0)),
+      order.status,
+      stageInfo[order.currentStage].label,
+      order.notes ?? "",
+    ]),
+  ];
+  const csv = `\uFEFF${rows.map((row) => row.map(safeCell).join(",")).join("\r\n")}`;
+  const file = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${customer.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "customer"}-orders.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function CustomerProfilePage() {
+  const { id } = useParams();
+  const { customers, orders, currentUser } = useApp();
+  const [orderFilter, setOrderFilter] = useState<"all" | "completed" | "cancelled">("all");
+  const permitted = ["admin", "marketing"].includes(currentUser?.role ?? "");
+  const customer = customers.find((item) => item.id === id);
+  if (!permitted) return <Navigate to="/customers" replace />;
+  if (!customer) return <Navigate to="/customers" replace />;
+  const customerOrders = orders
+    .filter((order) => order.customerId === customer.id)
+    .sort((first, second) => new Date(second.orderDate).getTime() - new Date(first.orderDate).getTime());
+  const completed = customerOrders.filter((order) => order.status === "completed");
+  const cancelled = customerOrders.filter((order) => order.status === "cancelled");
+  const visibleOrders = orderFilter === "all"
+    ? customerOrders
+    : customerOrders.filter((order) => order.status === orderFilter);
+  return (
+    <>
+      <Heading
+        eyebrow="Customer profile"
+        title={customer.companyName}
+        description="View this customer's contact information and complete order history in one place."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Link className="secondary-button" to="/customers"><ArrowLeft className="size-4" /> Customers</Link>
+            <button className="primary-button" onClick={() => downloadCustomerOrderSheet(customer, customerOrders)}>
+              <Download className="size-4" /> Download Excel sheet
+            </button>
+          </div>
+        }
+      />
+      <section className="surface mb-5 p-5">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Contact person</p><p className="mt-1 font-bold text-navy-900">{customer.contactPerson}</p></div>
+          <div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Phone</p><p className="mt-1 font-bold text-navy-900">{customer.phone}</p>{customer.alternativePhone && <p className="mt-1 text-sm text-slate-600">Alt: {customer.alternativePhone}</p>}</div>
+          <div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">GST number</p><p className="mt-1 font-bold text-navy-900">{customer.gstNumber || "Not provided"}</p></div>
+          <div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Customer status</p><p className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${customer.active ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>{customer.active ? "Active" : "Inactive"}</p></div>
+        </div>
+        <p className="mt-4 border-t border-slate-100 pt-4 text-sm leading-6 text-slate-600"><strong className="text-navy-900">Address: </strong>{customer.address}</p>
+      </section>
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="surface p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Total orders</p><p className="mt-2 text-3xl font-extrabold text-navy-900">{customerOrders.length}</p></div>
+        <div className="surface p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Completed orders</p><p className="mt-2 text-3xl font-extrabold text-emerald-700">{completed.length}</p></div>
+        <div className="surface p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Cancelled orders</p><p className="mt-2 text-3xl font-extrabold text-slate-600">{cancelled.length}</p></div>
+      </section>
+      <section className="surface mt-5 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
+          <div><h2 className="font-bold text-navy-900">Order history</h2><p className="mt-1 text-sm text-slate-600">Every order placed by {customer.companyName}.</p></div>
+          <div className="filter-scroll flex max-w-full gap-2 overflow-x-auto" aria-label="Filter customer orders">
+            {([ ["all", "All", customerOrders.length], ["completed", "Completed", completed.length], ["cancelled", "Cancelled", cancelled.length] ] as const).map(([value, label, count]) => (
+              <button key={value} onClick={() => setOrderFilter(value)} className={`min-h-10 shrink-0 rounded-lg px-3 text-sm font-bold ${orderFilter === value ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-700"}`}>{label} ({count})</button>
+            ))}
+          </div>
+        </div>
+        {visibleOrders.length ? <div className="divide-y divide-slate-100">
+          {visibleOrders.map((order) => (
+            <Link key={order.id} to={`/orders/${order.id}`} className="block p-4 transition hover:bg-sky-50 sm:grid sm:grid-cols-[140px_minmax(220px,1fr)_150px_130px_28px] sm:items-center sm:gap-4 sm:px-5">
+              <p className="font-extrabold text-brand">{order.orderNumber}</p>
+              <div className="mt-2 sm:mt-0"><p className="font-bold text-navy-900">{order.bagType ?? order.product}</p><p className="mt-0.5 text-sm text-slate-600">{order.quantity.toLocaleString("en-IN")} bags · {money(order.amount)}</p></div>
+              <span className={`mt-2 inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-bold capitalize sm:mt-0 ${order.status === "completed" ? "bg-emerald-50 text-emerald-800" : order.status === "cancelled" ? "bg-slate-100 text-slate-700" : "bg-sky-50 text-sky-800"}`}>{order.status}</span>
+              <p className="mt-2 text-sm font-semibold text-slate-700 sm:mt-0">{date(order.expectedDelivery)}</p>
+              <ChevronRight className="hidden size-5 text-slate-400 sm:block" />
+            </Link>
+          ))}
+        </div> : <Empty title="No matching orders" text="This customer has no orders in this status yet." />}
+      </section>
+    </>
+  );
+}
+
 function NewOrderPage() {
   const { customers, createOrder } = useApp();
   const navigate = useNavigate();
@@ -1356,6 +1700,15 @@ function NewOrderPage() {
     null,
   );
   const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
+  const [quantityValue, setQuantityValue] = useState("");
+  const [rateValue, setRateValue] = useState("");
+  const [advancePaid, setAdvancePaid] = useState<"yes" | "no">("no");
+  const [advanceValue, setAdvanceValue] = useState("");
+  const [designFile, setDesignFile] = useState<File | null>(null);
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const totalValue = Number(quantityValue || 0) * Number(rateValue || 0);
+  const advanceAmount = advancePaid === "yes" ? Number(advanceValue || 0) : 0;
+  const remainingValue = Math.max(0, totalValue - advanceAmount);
   const matchingCustomers = customers
     .filter((customer) => {
       const query = customerQuery.trim().toLocaleLowerCase();
@@ -1397,19 +1750,68 @@ function NewOrderPage() {
       setCustomerMenuOpen(true);
       return;
     }
+    if (advanceAmount > totalValue) {
+      setError("Advance amount cannot be more than the total order amount.");
+      return;
+    }
     setBusy(true);
     const form = new FormData(event.currentTarget);
     try {
       const order = await createOrder({
         customerId: selectedCustomer.id,
-        product: String(form.get("product")),
-        quantity: Number(form.get("quantity")),
-        amount: Number(form.get("amount")),
+        product: String(form.get("bagType")),
+        quantity: Number(quantityValue),
+        amount: totalValue,
+        bagType: String(form.get("bagType")),
+        bagSize: String(form.get("bagSize")),
+        printingColor: String(form.get("printingColor")),
+        ratePerBag: Number(rateValue),
+        advancePaid: advanceAmount,
+        primaryPhone: String(form.get("primaryPhone")),
+        alternativePhone: String(form.get("alternativePhone")) || undefined,
+        gstNumber: String(form.get("gstNumber")).trim().toUpperCase() || undefined,
         expectedDelivery: String(form.get("expectedDelivery")),
         priority: String(form.get("priority")),
         notes: String(form.get("notes")) || undefined,
       });
+      const uploadFile = async (
+        file: File,
+        assetType: "design" | "payment_proof",
+      ) => {
+        if (
+          !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+          file.size > 10 * 1024 * 1024
+        ) {
+          throw new Error(
+            "Use a JPG, PNG, or WebP image no larger than 10 MB.",
+          );
+        }
+        const intent = await api.uploadIntent(order.id, file, assetType);
+        await api.uploadToR2(intent.uploadUrl, file, () => undefined);
+        await api.completeUpload(intent.asset.id);
+      };
+      const uploadResults = await Promise.allSettled(
+        [
+          designFile ? uploadFile(designFile, "design") : null,
+          paymentProofFile
+            ? uploadFile(paymentProofFile, "payment_proof")
+            : null,
+        ].filter(Boolean) as Promise<void>[],
+      );
       navigate(`/orders/${order.id}`);
+      const failedUpload = uploadResults.find(
+        (result) => result.status === "rejected",
+      );
+      if (failedUpload && failedUpload.status === "rejected") {
+        toast(
+          `Order saved. A selected file could not be uploaded: ${failedUpload.reason instanceof Error ? failedUpload.reason.message : "please add it later from the order."}`,
+          "error",
+        );
+      } else if (uploadResults.length) {
+        toast("Order saved and selected files uploaded securely.");
+      } else {
+        toast("Order saved. Material and Design teams can begin their work.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create order.");
     } finally {
@@ -1426,15 +1828,24 @@ function NewOrderPage() {
         Back
       </button>
       <Heading
-        eyebrow="Order booking"
-        title="Create a new order"
-        description="Only essential information is required. Material and Design teams are notified after confirmation."
+        eyebrow="Order management"
+        title="Create new order"
+        description="Complete the order book details below. Required fields are marked with an asterisk (*)."
       />
-      <form className="surface mx-auto max-w-3xl p-5 md:p-7" onSubmit={submit}>
-        <section>
-          <h2 className="text-lg font-bold text-navy-900">1. Customer</h2>
+      <form className="mx-auto max-w-4xl" onSubmit={submit}>
+        <div className="page-copy mb-5 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <strong>Order book:</strong> Select the customer, add bag and payment details, then confirm the order. Material and Design teams are notified automatically.
+        </div>
+        <section className="surface overflow-visible p-5 md:p-7">
+          <div className="flex min-w-0 items-start gap-3 border-b border-slate-200 pb-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-900 text-sm font-bold text-white">A</span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-navy-900">Customer details</h2>
+              <p className="mt-0.5 text-sm text-slate-600">Find the customer before booking this order.</p>
+            </div>
+          </div>
           <label className="label mt-4" htmlFor="customer-search">
-            Search and choose customer
+            Search customer <span aria-hidden="true">*</span>
           </label>
           <div className="relative">
             <Search
@@ -1443,7 +1854,7 @@ function NewOrderPage() {
             />
             <input
               id="customer-search"
-              className="field pl-12 pr-12"
+              className="field field-with-leading-icon field-with-trailing-action"
               value={customerQuery}
               role="combobox"
               aria-autocomplete="list"
@@ -1517,74 +1928,202 @@ function NewOrderPage() {
             Type a few letters, then select the correct customer from the list.
           </p>
           {selectedCustomer && (
-            <p className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+            <p className="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
               <CheckCircle2 className="size-4" aria-hidden="true" />
               Selected: {selectedCustomer.companyName}
             </p>
           )}
         </section>
-        <section className="mt-7 border-t border-slate-200 pt-6">
-          <h2 className="text-lg font-bold text-navy-900">
-            2. Bag specification
-          </h2>
-          <Field
-            name="product"
-            label="Bag product / description"
-            placeholder="Example: 25 kg printed woven fertilizer bag"
-            required
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              name="quantity"
-              label="Quantity"
-              type="number"
-              min="1"
-              required
-            />
-            <Field
-              name="amount"
-              label="Order value (₹)"
-              type="number"
-              min="0"
-              required
-            />
+        <section className="surface mt-5 p-5 md:p-7">
+          <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-900 text-sm font-bold text-white">B</span>
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">Contact and GST details</h2>
+              <p className="mt-0.5 text-sm text-slate-600">Use the customer’s current contact details for this order.</p>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2" key={selectedCustomer?.id ?? "no-customer"}>
+            <Field name="primaryPhone" label="Primary phone number *" type="tel" defaultValue={selectedCustomer?.phone} required />
+            <Field name="alternativePhone" label="Alternative phone number (optional)" type="tel" defaultValue={selectedCustomer?.alternativePhone} />
+            <Field name="gstNumber" label="GST number (optional)" placeholder="Example: 27ABCDE1234F1Z5" defaultValue={selectedCustomer?.gstNumber} />
           </div>
         </section>
-        <section className="mt-7 border-t border-slate-200 pt-6">
-          <h2 className="text-lg font-bold text-navy-900">3. Delivery</h2>
+        <section className="surface mt-5 p-5 md:p-7">
+          <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-900 text-sm font-bold text-white">C</span>
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">Bag details</h2>
+              <p className="mt-0.5 text-sm text-slate-600">These details appear on the production order and help every department prepare correctly.</p>
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              name="expectedDelivery"
-              label="Expected delivery"
-              type="date"
-              required
-            />
             <label>
-              <span className="label mt-4">Priority</span>
-              <select className="field" name="priority">
-                <option value="normal">Normal</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
+              <span className="label mt-4">Type of bag *</span>
+              <input className="field" name="bagType" list="bag-types" placeholder="Select or type bag type" required />
+              <datalist id="bag-types">
+                <option value="PP woven bag" />
+                <option value="Non-woven bag" />
+                <option value="Cotton bag" />
+                <option value="Jute bag" />
+                <option value="Paper bag" />
+              </datalist>
+            </label>
+            <Field name="bagSize" label="Bag size *" placeholder="Example: 25 kg or 20 × 30 inch" required />
+            <Field name="printingColor" label="Colour of printing *" placeholder="Example: Blue and green" required />
+            <label>
+              <span className="label mt-4">Rate per bag (₹) *</span>
+              <input className="field" inputMode="decimal" type="number" min="0" step="0.01" placeholder="0.00" required value={rateValue} onChange={(event) => setRateValue(event.target.value)} />
+            </label>
+            <label>
+              <span className="label mt-4">Number of bags *</span>
+              <input
+                className="field"
+                type="number"
+                min="1"
+                placeholder="0"
+                required
+                value={quantityValue}
+                onChange={(event) => setQuantityValue(event.target.value)}
+              />
+            </label>
+            <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-sky-800">Total amount</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-navy-900">₹ {totalValue.toLocaleString("en-IN")}</p>
+              <p className="mt-1 text-xs text-slate-600">Calculated from rate per bag × number of bags</p>
+            </div>
+            <Field name="expectedDelivery" label="Delivery date *" type="date" required />
+          </div>
+        </section>
+        <section className="surface mt-5 p-5 md:p-7">
+          <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-900 text-sm font-bold text-white">D</span>
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">Design file</h2>
+              <p className="mt-0.5 text-sm text-slate-600">Optional. Add the customer’s artwork now, or the Designer can add it later.</p>
+            </div>
+          </div>
+          <label className="mt-4 flex min-h-28 cursor-pointer items-center gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 transition hover:border-sky-400 hover:bg-sky-50">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white text-sky-700 shadow-sm"><ImagePlus className="size-5" /></span>
+            <span className="min-w-0">
+              <span className="block font-semibold text-navy-900">Design image / file</span>
+              <span className="mt-1 block truncate text-sm text-slate-600">{designFile ? designFile.name : "Choose JPG, PNG, or WebP image (maximum 10 MB)"}</span>
+            </span>
+            <span className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-navy-900">Choose file</span>
+            <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setDesignFile(event.target.files?.[0] ?? null)} />
+          </label>
+        </section>
+        <section className="surface mt-5 p-5 md:p-7">
+          <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-900 text-sm font-bold text-white">E</span>
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">Payment details</h2>
+              <p className="mt-0.5 text-sm text-slate-600">Record any advance received today. The due amount is calculated automatically.</p>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label>
+              <span className="label mt-4">Advance paid? *</span>
+              <select className="field" value={advancePaid} onChange={(event) => { const value = event.target.value as "yes" | "no"; setAdvancePaid(value); if (value === "no") setAdvanceValue(""); }}>
+                <option value="no">No, no advance received</option>
+                <option value="yes">Yes, advance received</option>
               </select>
             </label>
+            <label>
+              <span className="label mt-4">Advance amount (₹) {advancePaid === "yes" ? "*" : ""}</span>
+              <input className="field" inputMode="decimal" type="number" min="0" max={totalValue || undefined} step="0.01" placeholder="0.00" disabled={advancePaid === "no"} required={advancePaid === "yes"} value={advanceValue} onChange={(event) => setAdvanceValue(event.target.value)} />
+            </label>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Remaining / due amount</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-navy-900">₹ {remainingValue.toLocaleString("en-IN")}</p>
+              <p className="mt-1 text-xs text-slate-600">Total amount less advance amount</p>
+            </div>
+            <label className="mt-4 flex min-h-28 cursor-pointer items-center gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 transition hover:border-sky-400 hover:bg-sky-50">
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white text-sky-700 shadow-sm"><ReceiptText className="size-5" /></span>
+              <span className="min-w-0">
+                <span className="block font-semibold text-navy-900">Payment proof (optional)</span>
+                <span className="mt-1 block truncate text-sm text-slate-600">{paymentProofFile ? paymentProofFile.name : "Upload payment screenshot or receipt (JPG, PNG, or WebP; maximum 10 MB)"}</span>
+              </span>
+              <span className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-navy-900">Choose file</span>
+              <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setPaymentProofFile(event.target.files?.[0] ?? null)} />
+            </label>
           </div>
-          <label className="label mt-4">Notes (optional)</label>
+        </section>
+        <section className="surface mt-5 p-5 md:p-7">
+          <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-900 text-sm font-bold text-white">F</span>
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">Additional information</h2>
+              <p className="mt-0.5 text-sm text-slate-600">Add special instructions that production, delivery, or accounts should know.</p>
+            </div>
+          </div>
+          <label className="label mt-4">Order note (optional)</label>
           <textarea
             className="field min-h-24 py-3"
             name="notes"
-            placeholder="Important customer or production instructions"
+            placeholder="Example: Print placement, packing instruction, delivery contact, or other customer request"
           />
+          <label className="mt-4 block max-w-sm">
+            <span className="label">Order priority</span>
+            <select className="field" name="priority">
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </label>
         </section>
         {error && <ErrorText>{error}</ErrorText>}
-        <div className="mt-7 rounded-xl bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-          <strong>After creation:</strong> Material and Design become ready in
-          parallel. No image is required at order booking.
+        <div className="mt-5 rounded-xl border border-sky-100 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+          <strong>After confirmation:</strong> Material and Design tasks are created. Cutting starts after material is confirmed available; Printing starts only after Cutting and Plate are complete.
         </div>
         <button className="primary-button mt-5 w-full" disabled={busy}>
-          {busy ? "Creating order…" : "Confirm and create order"}
+          {busy ? "Saving order…" : "Confirm order"}
         </button>
       </form>
     </>
+  );
+}
+
+function DetailedCompletionForm({
+  stage,
+  order,
+  onComplete,
+}: {
+  stage: StageKey;
+  order: Order;
+  onComplete: (data: Record<string, unknown>) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const data = Object.fromEntries(
+      [...form.entries()].filter(([, value]) => String(value).trim() !== ""),
+    );
+    onComplete(data);
+  };
+  const title = stage === "billing" ? "Billing details" : stage === "payment" ? "Payment details" : "Delivery confirmation";
+  return (
+    <form className="rounded-xl border border-sky-200 bg-sky-50 p-4" onSubmit={submit}>
+      <p className="font-bold text-navy-900">{title}</p>
+      <p className="mt-1 text-sm text-slate-600">Record the details before completing this task.</p>
+      {stage === "billing" && <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Field name="invoiceNumber" label="Invoice number" required />
+        <Field name="invoiceDate" label="Invoice date" type="date" defaultValue={today} required />
+        <Field name="invoiceAmount" label="Invoice amount (₹)" type="number" min="0" defaultValue={String(order.amount)} required />
+      </div>}
+      {stage === "payment" && <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Field name="paymentReference" label="Payment reference" required />
+        <Field name="paymentDate" label="Payment date" type="date" defaultValue={today} required />
+        <Field name="paidAmount" label="Amount received (₹)" type="number" min="0" defaultValue={String(order.remainingAmount ?? Math.max(0, order.amount - (order.advancePaid ?? 0)))} required />
+      </div>}
+      {stage === "delivery" && <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Field name="receivedBy" label="Received by" defaultValue={order.contactPerson} required />
+        <Field name="deliveryDate" label="Delivery date" type="date" defaultValue={today} required />
+      </div>}
+      <label className="label mt-4">Note (optional)</label>
+      <textarea className="field mt-1 min-h-20 py-3" name="note" placeholder="Add any helpful information" />
+      <button className="primary-button mt-4 w-full">Save and complete</button>
+    </form>
   );
 }
 
@@ -1600,16 +2139,16 @@ function OrderDetailPage() {
     const stage = searchParams.get("stage");
     return stage && stage in stageInfo ? (stage as StageKey) : null;
   });
-  const [pending, setPending] = useState<{
-    action: string;
-    title: string;
-    message: string;
-  } | null>(null);
   const [cancelPending, setCancelPending] = useState(false);
+  const [materialAvailableConfirm, setMaterialAvailableConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [quantity, setQuantity] = useState<number | "">("");
-  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(!order);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editRate, setEditRate] = useState("");
+  const [editAdvance, setEditAdvance] = useState("");
   useEffect(() => {
     if (!id) return;
     // Loading fresh server state when the route changes is intentional.
@@ -1628,84 +2167,87 @@ function OrderDetailPage() {
   const currentRole = operatingRole(stageInfo[order.currentStage].role);
   const currentVisual = roleVisuals[currentRole];
   const CurrentRoleIcon = currentVisual.icon;
-  const consequence = (stage: StageKey, action: string) => {
-    const next: Partial<Record<StageKey, string>> = {
-      material: "Cutting",
-      design: "Plate preparation",
-      cutting: "Printing when Plate is also complete",
-      plate: "Printing when Cutting is also complete",
-      printing: "Stitching",
-      stitching: "Packing",
-      packing: "Delivery Challan",
-      dc: "Billing",
-      billing: "Payment and Dispatch",
-      payment: "Delivery after Dispatch",
-      dispatch: "Delivery after Payment",
-      delivery: "order completion and 30-day image retention",
-      return: "Refund",
-      refund: "case closure",
-    };
-    return action === "complete"
-      ? `Complete ${stageInfo[stage].short}? This will make ${next[stage] ?? "the next work"} ready.`
-      : action === "start"
-        ? `Start ${stageInfo[stage].short}? Everyone will see this step as In progress.`
-        : action === "block"
-          ? `Report this issue? Production will pause at ${stageInfo[stage].short} until it is resolved.`
-          : `Resolve this issue? The responsible team will be able to continue.`;
+  const canEditOrder = ["admin", "marketing"].includes(currentUser.role);
+  const canManageDesignApproval = ["admin", "marketing"].includes(currentUser.role);
+  const usesDetailedTaskScreen = ["accountant", "marketing"].includes(currentUser.role);
+  const openOrderEdit = () => {
+    setEditError("");
+    setEditQuantity(String(order.quantity));
+    setEditRate(String(order.ratePerBag ?? Math.round(order.amount / order.quantity)));
+    setEditAdvance(String(order.advancePaid ?? 0));
+    setEditOpen(true);
   };
-  const ask = (action: string) => {
-    if (!selected) return;
-    if (selected === "material" && action === "complete") {
-      const form = document.querySelector(`[data-stage-form="material"]`);
-      const required = Number((form?.querySelector('[name="requiredQuantity"]') as HTMLInputElement | null)?.value);
-      const available = Number((form?.querySelector('[name="availableQuantity"]') as HTMLInputElement | null)?.value);
-      if (required <= 0 || available < 0)
-        return toast("Enter the required and available material quantities first.", "error");
-      if (available < required)
-        return toast("Material is short. Use ‘Report an issue’ so Admin can arrange stock.", "error");
+  const saveOrderEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const updatedQuantity = Number(editQuantity);
+    const updatedRate = Number(editRate);
+    const updatedAmount = updatedQuantity * updatedRate;
+    const updatedAdvance = Number(editAdvance || 0);
+    if (!updatedQuantity || updatedQuantity < 1 || updatedRate < 0) {
+      setEditError("Enter a valid rate and number of bags.");
+      return;
     }
-    if (selected === "printing" && action === "complete") {
-      const qualityCheck = document.querySelector('[data-stage-form="printing"] [name="qualityChecked"]') as HTMLInputElement | null;
-      if (!qualityCheck?.checked)
-        return toast("Quality check is not passed. Report an issue before finishing printing.", "error");
+    if (updatedAdvance > updatedAmount) {
+      setEditError("Advance amount cannot be more than the total order amount.");
+      return;
     }
-    if (action === "block" && note.trim().length < 3)
-      return toast("Explain the issue before reporting it.", "error");
-    setPending({
-      action,
-      title: `${action === "complete" ? "Complete" : action === "start" ? "Start" : action === "block" ? "Report issue for" : "Resolve"} ${stageInfo[selected].short}?`,
-      message: consequence(selected, action),
-    });
-  };
-  const execute = async () => {
-    if (!pending || !selected) return;
+    setEditBusy(true);
+    setEditError("");
     try {
+      const updated = await api.updateOrder(order, {
+        customerId: order.customerId,
+        product: String(form.get("bagType")),
+        quantity: updatedQuantity,
+        amount: updatedAmount,
+        bagType: String(form.get("bagType")),
+        bagSize: String(form.get("bagSize")),
+        printingColor: String(form.get("printingColor")),
+        ratePerBag: updatedRate,
+        advancePaid: updatedAdvance,
+        primaryPhone: String(form.get("primaryPhone")),
+        alternativePhone: String(form.get("alternativePhone")) || undefined,
+        gstNumber: String(form.get("gstNumber")).trim().toUpperCase() || undefined,
+        expectedDelivery: String(form.get("expectedDelivery")),
+        priority: String(form.get("priority")),
+        notes: String(form.get("notes")) || undefined,
+      });
+      setOrder(updated);
+      setEditOpen(false);
+      await reload();
+      toast("Order details updated.");
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Could not update order details.");
+    } finally {
+      setEditBusy(false);
+    }
+  };
+  const editTotal = Number(editQuantity || 0) * Number(editRate || 0);
+  const editDue = Math.max(0, editTotal - Number(editAdvance || 0));
+  const performTaskAction = async (
+    action: "complete" | "block" | "resolve" | "material_available",
+    taskData: Record<string, unknown> = {},
+  ) => {
+    if (!selected) return;
+    try {
+      if (action === "material_available") {
+        const completed = await updateStage(order, selected, {
+          action: "complete",
+          data: { materialAvailable: "yes" },
+        });
+        setOrder(completed);
+        setSelected(null);
+        toast("Material confirmed. The order is now in the Cutting list.");
+        return;
+      }
       const updated = await updateStage(order, selected, {
-        action: pending.action,
-        note: note || undefined,
-        data: stageData(selected),
+        action,
+        note: action === "block" ? `${stageInfo[selected].label} needs attention.` : undefined,
+        data: selected === "printing" && action === "complete" ? { qualityChecked: true, ...taskData } : taskData,
       });
       setOrder(updated);
       setSelected(null);
-      setPending(null);
-      setNote("");
-    } catch {
-      setPending(null);
-    }
-  };
-  const progress = async () => {
-    if (!selected || quantity === "") return;
-    try {
-      const updated = await updateStage(order, selected, {
-        action: "progress",
-        completedQuantity: quantity,
-        note: note || undefined,
-        data: stageData(selected),
-      });
-      setOrder(updated);
-    } catch {
-      /* toast is shown by context */
-    }
+    } catch { /* The shared API handler shows the friendly error toast. */ }
   };
   const cancelOrder = async () => {
     setBusy(true);
@@ -1724,21 +2266,16 @@ function OrderDetailPage() {
       setBusy(false);
     }
   };
-  const stageData = (stage: StageKey) => {
-    const result: Record<string, unknown> = {};
-    document
-      .querySelectorAll<
-        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-      >(`[data-stage-form="${stage}"] [name]`)
-      .forEach((element) => {
-        result[element.name] =
-          element.type === "number"
-            ? Number(element.value)
-            : element.type === "checkbox"
-              ? (element as HTMLInputElement).checked
-              : element.value;
-      });
-    return result;
+  const markMaterialAvailable = async () => {
+    try {
+      const updated = await api.markMaterialAvailable(order);
+      setOrder(updated);
+      toast("Material marked available. Cutting Master can check and continue.");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not update material availability.", "error");
+    } finally {
+      setMaterialAvailableConfirm(false);
+    }
   };
   return (
     <>
@@ -1761,6 +2298,12 @@ function OrderDetailPage() {
                 {order.product} · {order.quantity.toLocaleString("en-IN")} bags
               </p>
             </div>
+            <div className="flex flex-wrap items-start justify-end gap-3">
+              {canEditOrder && order.status === "active" && (
+                <button className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2 font-semibold text-navy-900 shadow-sm transition hover:bg-slate-100" onClick={openOrderEdit}>
+                  Edit order details
+                </button>
+              )}
             <div className="flex min-w-52 items-start gap-3 rounded-xl bg-white/10 p-3">
               <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${currentVisual.soft} ${currentVisual.color}`}>
                 <CurrentRoleIcon className="size-5" aria-hidden="true" />
@@ -1771,6 +2314,7 @@ function OrderDetailPage() {
                 <p className="mt-0.5 text-xs text-slate-300">{roleLabels[currentRole]}</p>
                 <div className="mt-2"><StatusBadge status={order.stages[order.currentStage].status} /></div>
               </div>
+            </div>
             </div>
           </div>
           <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/15 pt-5 md:grid-cols-4">
@@ -1798,9 +2342,6 @@ function OrderDetailPage() {
           className="primary-button mt-4"
           onClick={() => {
             setSelected(order.currentStage);
-            setQuantity(
-              order.stages[order.currentStage].completedQuantity ?? "",
-            );
           }}
         >
           {canManageStage(currentUser.role, order.currentStage)
@@ -1809,7 +2350,14 @@ function OrderDetailPage() {
           <ChevronRight className="size-4" />
         </button>
       </section>
-      {currentUser.role === "designer" && (
+      {currentUser.role === "admin" && ["blocked", "issue"].includes(order.stages.material.status) && (
+        <section className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <h2 className="font-bold text-amber-950">Material is unavailable</h2>
+          <p className="mt-1 text-sm text-amber-900">When stock arrives, confirm it here. Cutting Master will then receive the material check again.</p>
+          <button className="primary-button mt-4" onClick={() => setMaterialAvailableConfirm(true)}>Mark material available</button>
+        </section>
+      )}
+      {canManageDesignApproval && (
         <DesignWorkspace order={order} setOrder={setOrder} reload={reload} />
       )}
       <section className="mt-4 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
@@ -1878,6 +2426,42 @@ function OrderDetailPage() {
             </button>
           </section>
         )}
+      {editOpen && (
+        <Modal title="Edit order details" close={() => !editBusy && setEditOpen(false)}>
+          <p className="rounded-xl bg-sky-50 p-3 text-sm leading-6 text-sky-900">Update booking details, customer contact information, bag details, payment amounts, or delivery date. Quantity cannot be changed after production has started.</p>
+          <form className="mt-2" onSubmit={saveOrderEdit}>
+            <h3 className="mt-5 font-bold text-navy-900">Customer contact</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field name="primaryPhone" label="Primary phone number *" type="tel" defaultValue={order.phone} required />
+              <Field name="alternativePhone" label="Alternative phone number (optional)" type="tel" defaultValue={order.alternativePhone} />
+              <Field name="gstNumber" label="GST number (optional)" defaultValue={order.gstNumber} />
+            </div>
+            <h3 className="mt-6 border-t border-slate-200 pt-5 font-bold text-navy-900">Bag details</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field name="bagType" label="Type of bag *" defaultValue={order.bagType ?? order.product} required />
+              <Field name="bagSize" label="Bag size *" defaultValue={order.bagSize} required />
+              <Field name="printingColor" label="Colour of printing *" defaultValue={order.printingColor} required />
+              <label><span className="label mt-4">Rate per bag (₹) *</span><input className="field" type="number" min="0" step="1" required value={editRate} onChange={(event) => setEditRate(event.target.value)} /></label>
+              <label><span className="label mt-4">Number of bags *</span><input className="field" type="number" min="1" required value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} /></label>
+              <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-sky-800">Total amount</p><p className="mt-1 text-xl font-extrabold text-navy-900">₹ {editTotal.toLocaleString("en-IN")}</p></div>
+              <Field name="expectedDelivery" label="Delivery date *" type="date" defaultValue={order.expectedDelivery} required />
+            </div>
+            <h3 className="mt-6 border-t border-slate-200 pt-5 font-bold text-navy-900">Payment and note</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label><span className="label mt-4">Advance amount (₹)</span><input className="field" type="number" min="0" max={editTotal || undefined} step="1" value={editAdvance} onChange={(event) => setEditAdvance(event.target.value)} /></label>
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-600">Remaining / due amount</p><p className="mt-1 text-xl font-extrabold text-navy-900">₹ {editDue.toLocaleString("en-IN")}</p></div>
+              <label><span className="label mt-4">Priority</span><select className="field" name="priority" defaultValue={order.priority}><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
+            </div>
+            <label className="label mt-4">Order note (optional)</label>
+            <textarea className="field min-h-24 py-3" name="notes" defaultValue={order.notes} placeholder="Add or update customer instructions" />
+            {editError && <ErrorText>{editError}</ErrorText>}
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button type="button" className="secondary-button" disabled={editBusy} onClick={() => setEditOpen(false)}>Cancel</button>
+              <button className="primary-button" disabled={editBusy}>{editBusy ? "Saving…" : "Save changes"}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
       {selected && state && (
         <div
           className="fixed inset-0 z-40 flex justify-end bg-navy-950/50"
@@ -1900,20 +2484,6 @@ function OrderDetailPage() {
                 <X />
               </button>
             </div>
-            <div className="mt-4">
-              <StatusBadge status={state.status} />
-            </div>
-            <p className="mt-4 rounded-xl bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-              {stageInfo[selected].help}
-            </p>
-            <StageFields
-              stage={selected}
-              quantity={quantity}
-              setQuantity={setQuantity}
-              note={note}
-              setNote={setNote}
-              order={order}
-            />
             {!manage && (
               <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <strong>View only:</strong> This step belongs to{" "}
@@ -1921,80 +2491,35 @@ function OrderDetailPage() {
               </p>
             )}
             <div className="mt-6 space-y-3">
-              {manage && state.status === "ready" && (
-                <button
-                  className="primary-button w-full"
-                  onClick={() => ask("start")}
-                >
-                  Start this work
-                </button>
-              )}
-              {manage && state.status === "in_progress" && selected === "design" && (
-                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-                  <strong>Finish design in the Design approval section.</strong>
-                  <br />Choose <em>No customer image</em>, or upload the design and send it to the customer for approval. Design is completed only after that approval.
-                  <button
-                    className="primary-button mt-3 w-full"
-                    onClick={() => {
-                      setSelected(null);
-                      window.setTimeout(() => document.getElementById("design-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-                    }}
-                  >
-                    Continue to design approval
-                    <ChevronRight className="size-4" />
-                  </button>
+              {manage && ["ready", "blocked", "issue"].includes(state.status) && selected === "material" && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                  <p className="font-bold text-navy-900">Is the material available?</p>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <button className="primary-button w-full" onClick={() => void performTaskAction("material_available")}>Yes</button>
+                    <button className="secondary-button w-full !border-red-200 !text-red-700" onClick={() => void performTaskAction("block")}>No</button>
+                  </div>
                 </div>
               )}
-              {manage &&
-                state.status === "in_progress" &&
-                selected !== "design" && (
-                  <>
-                    <button
-                      className="secondary-button w-full"
-                      onClick={progress}
-                    >
-                      Save completed quantity
-                    </button>
-                    <button
-                      className="primary-button w-full"
-                      onClick={() => ask("complete")}
-                    >
-                      Finish my work
-                    </button>
-                    <button
-                      className="secondary-button w-full !border-red-200 !text-red-700"
-                      onClick={() => ask("block")}
-                    >
-                      Report an issue
-                    </button>
-                  </>
-                )}
-              {manage && ["blocked", "issue"].includes(state.status) && (
-                <button
-                  className="primary-button w-full"
-                  onClick={() => ask("resolve")}
-                >
-                  Resolve issue
-                </button>
+              {manage && !usesDetailedTaskScreen && ["ready", "in_progress", "blocked", "issue"].includes(state.status) && selected !== "material" && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                  <p className="font-bold text-navy-900">Is {stageInfo[selected].short.toLowerCase()} completed?</p>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <button className="primary-button w-full" onClick={() => void performTaskAction("complete")}>Yes</button>
+                    <button className="secondary-button w-full" onClick={() => setSelected(null)}>No</button>
+                  </div>
+                </div>
               )}
-              <button
-                className="secondary-button w-full"
-                onClick={() => setSelected(null)}
-              >
-                Cancel
-              </button>
+              {manage && usesDetailedTaskScreen && ["billing", "payment", "delivery"].includes(selected) && ["ready", "in_progress", "blocked", "issue"].includes(state.status) && (
+                <DetailedCompletionForm
+                  stage={selected}
+                  order={order}
+                  onComplete={(data) => void performTaskAction("complete", data)}
+                />
+              )}
             </div>
           </aside>
         </div>
       )}
-      <ConfirmDialog
-        open={!!pending}
-        title={pending?.title ?? ""}
-        message={pending?.message ?? ""}
-        confirmLabel={`Yes, ${pending?.action ?? "continue"}`}
-        onCancel={() => setPending(null)}
-        onConfirm={() => void execute()}
-      />
       <ConfirmDialog
         open={cancelPending}
         title="Cancel this entire order?"
@@ -2003,124 +2528,16 @@ function OrderDetailPage() {
         onCancel={() => setCancelPending(false)}
         onConfirm={() => void cancelOrder()}
       />
+      <ConfirmDialog
+        open={materialAvailableConfirm}
+        title="Material is now available?"
+        message="This sends the material check back to Cutting Master. Cutting can proceed only after they confirm Yes."
+        confirmLabel="Yes, mark available"
+        onCancel={() => setMaterialAvailableConfirm(false)}
+        onConfirm={() => void markMaterialAvailable()}
+      />
     </>
   );
-}
-
-function StageFields({
-  stage,
-  quantity,
-  setQuantity,
-  note,
-  setNote,
-  order,
-}: {
-  stage: StageKey;
-  quantity: number | "";
-  setQuantity: (value: number | "") => void;
-  note: string;
-  setNote: (value: string) => void;
-  order: Order;
-}) {
-  const quantityStages = ["cutting", "printing", "stitching", "packing"];
-  return (
-    <div className="mt-5" data-stage-form={stage}>
-      {quantityStages.includes(stage) && (
-        <>
-          <label className="label">Completed quantity</label>
-          <div className="flex min-h-16 overflow-hidden rounded-xl border-2 border-slate-200 bg-slate-50 focus-within:border-sky-500">
-            <button type="button" className="min-w-16 border-r border-slate-200 text-3xl font-bold text-navy-900 hover:bg-slate-100" aria-label="Decrease completed quantity by 10" onClick={() => setQuantity(Math.max(0, Number(quantity || 0) - 10))}>−</button>
-            <input
-              className="min-w-0 flex-1 border-0 bg-transparent text-center text-2xl font-extrabold text-navy-900 focus:ring-0"
-              type="number"
-              min="0"
-              max={order.quantity}
-              value={quantity}
-              onChange={(event) => setQuantity(event.target.value === "" ? "" : Number(event.target.value))}
-            />
-            <button type="button" className="min-w-16 border-l border-slate-200 text-3xl font-bold text-navy-900 hover:bg-slate-100" aria-label="Increase completed quantity by 10" onClick={() => setQuantity(Math.min(order.quantity, Number(quantity || 0) + 10))}>+</button>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Maximum {order.quantity.toLocaleString("en-IN")} bags
-          </p>
-        </>
-      )}
-      <DynamicFields stage={stage} />
-      <label className="label mt-4">Note for the next team (optional)</label>
-      <textarea
-        className="field min-h-24 py-3"
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-        placeholder="Write helpful information for the next person"
-      />
-    </div>
-  );
-}
-function DynamicFields({ stage }: { stage: StageKey }) {
-  if (stage === "material")
-    return (
-      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-        <p className="font-bold text-amber-950">Material check</p>
-        <p className="mt-1 text-sm text-amber-900">Count the available material before confirming. If it is less than required, report an issue instead.</p>
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <Field name="requiredQuantity" label="Required quantity" type="number" min="0" />
-          <Field name="availableQuantity" label="Available quantity" type="number" min="0" />
-        </div>
-      </div>
-    );
-  if (stage === "printing")
-    return (
-      <>
-        <Field name="machine" label="Printing machine" />
-        <Field name="operatorNote" label="Print details" />
-        <label className="mt-4 flex min-h-14 items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <span><strong className="block">Quality check passed</strong><span className="text-sm text-slate-500">Check print alignment and colour before finishing.</span></span>
-          <input className="size-6 accent-emerald-600" name="qualityChecked" type="checkbox" defaultChecked />
-        </label>
-      </>
-    );
-  if (stage === "packing")
-    return (
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Field name="boxes" label="Number of boxes" type="number" min="0" />
-        <Field name="weightKg" label="Weight (kg)" type="number" min="0" />
-      </div>
-    );
-  if (stage === "dc") return <Field name="challanNumber" label="D.C. number" />;
-  if (stage === "billing")
-    return (
-      <>
-        <Field name="invoiceNumber" label="Invoice number" />
-        <Field
-          name="invoiceAmount"
-          label="Invoice amount"
-          type="number"
-          min="0"
-        />
-      </>
-    );
-  if (stage === "payment")
-    return (
-      <>
-        <Field name="paymentReference" label="Payment reference" />
-        <Field name="paidAmount" label="Paid amount" type="number" min="0" />
-      </>
-    );
-  if (stage === "dispatch")
-    return (
-      <>
-        <Field name="transporter" label="Transporter" />
-        <Field name="trackingNumber" label="Tracking number" />
-      </>
-    );
-  if (stage === "return" || stage === "refund")
-    return (
-      <Field
-        name="reference"
-        label={`${stage === "return" ? "Return" : "Refund"} reference`}
-      />
-    );
-  return null;
 }
 
 function DesignWorkspace({
@@ -2254,12 +2671,12 @@ function DesignWorkspace({
     <section className="surface mt-4 p-5" id="design-workspace">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="eyebrow">Optional artwork</p>
+          <p className="eyebrow">Marketing / Admin</p>
           <h2 className="mt-1 text-xl font-bold text-navy-900">
-            Design versions and approval
+            Artwork and customer approval
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Choose one: confirm no image was supplied, or upload a design version and send it for customer approval.
+            Upload the final artwork, then send it to the customer for approval or record their response here. The Designer does not manage this step.
           </p>
         </div>
         {order.stages.design.status !== "completed" && (
@@ -3148,6 +3565,7 @@ function App() {
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/orders/new" element={<NewOrderPage />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
+        <Route path="/customers/:id" element={<CustomerProfilePage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/queue" element={<OrdersPage queue />} />
         <Route

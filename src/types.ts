@@ -9,7 +9,7 @@ export interface User {
   id: string; name: string; email: string; role: Role; department: string; initials: string; active: boolean; mustChangePassword: boolean
 }
 export interface Customer {
-  id: string; companyName: string; contactPerson: string; phone: string; email?: string; address: string; active: boolean; createdAt: string; updatedAt: string
+  id: string; companyName: string; contactPerson: string; phone: string; alternativePhone?: string; gstNumber?: string; email?: string; address: string; active: boolean; createdAt: string; updatedAt: string
 }
 export interface StageState {
   status: StageStatus; ownerRole: Role; progress?: number; completedQuantity?: number; startedAt?: string; completedAt?: string; note?: string; data?: Record<string, unknown>; noCustomerImage?: boolean
@@ -21,6 +21,6 @@ export interface DesignAsset {
   id: string; orderId: string; version: number; fileName: string; contentType: string; size?: number; expectedSize: number; width?: number; height?: number; status: 'pending' | 'available' | 'in_review' | 'approved' | 'changes_requested' | 'rejected' | 'deleted'; uploadedByName: string; createdAt: string; decisionReason?: string
 }
 export interface Order {
-  id: string; orderNumber: string; customerId: string; customer: string; contactPerson: string; phone: string; product: string; quantity: number; amount: number; orderDate: string; expectedDelivery: string; priority: Priority; currentStage: StageKey; stages: Record<StageKey, StageState>; version: number; status: string; notes?: string; createdAt: string; updatedAt: string; closedAt?: string; activity?: AuditEvent[]; designAssets?: DesignAsset[]
+  id: string; orderNumber: string; customerId: string; customer: string; contactPerson: string; phone: string; alternativePhone?: string; gstNumber?: string; product: string; quantity: number; amount: number; bagType?: string; bagSize?: string; printingColor?: string; ratePerBag?: number; advancePaid?: number; remainingAmount?: number; orderDate: string; expectedDelivery: string; priority: Priority; currentStage: StageKey; stages: Record<StageKey, StageState>; version: number; status: string; notes?: string; createdAt: string; updatedAt: string; closedAt?: string; activity?: AuditEvent[]; designAssets?: DesignAsset[]
 }
 export interface ApiErrorBody { code: string; message: string; requestId?: string; fields?: Array<{ field: string; message: string }> }

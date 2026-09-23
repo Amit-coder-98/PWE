@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -166,6 +166,10 @@ class MongoRepository:
         return clean(document) or {}
 
     def list_customers(self, query: str = "") -> list[dict]:
+        cutoff = now() - timedelta(days=183)
+        active_customer_ids = self.db.orders.distinct("customerId", {"createdAt": {"$gte": cutoff}})
+        self.db.customers.update_many({"id": {"$in": active_customer_ids}}, {"$set": {"active": True}})
+        self.db.customers.update_many({"id": {"$nin": active_customer_ids}}, {"$set": {"active": False}})
         criteria: dict[str, Any] = {}
         if query:
             criteria["$or"] = [{field: {"$regex": query, "$options": "i"}} for field in ("companyName", "contactPerson", "phone", "email")]
@@ -185,16 +189,23 @@ class MongoRepository:
 
     def create_order(self, payload: dict, customer: dict, actor: dict) -> dict:
         timestamp = now()
+        advance_paid = payload.get("advancePaid", 0)
         document = {
             "id": str(uuid4()), "orderNumber": self.next_order_number(), "customerId": customer["id"],
-            "customer": customer["companyName"], "contactPerson": customer["contactPerson"], "phone": customer["phone"],
+            "customer": customer["companyName"], "contactPerson": customer["contactPerson"], "phone": payload.get("primaryPhone") or customer["phone"],
+            "alternativePhone": payload.get("alternativePhone") or customer.get("alternativePhone"),
+            "gstNumber": payload.get("gstNumber") or customer.get("gstNumber"),
             "product": payload["product"], "quantity": payload["quantity"], "amount": payload["amount"],
+            "bagType": payload.get("bagType"), "bagSize": payload.get("bagSize"),
+            "printingColor": payload.get("printingColor"), "ratePerBag": payload.get("ratePerBag"),
+            "advancePaid": advance_paid, "remainingAmount": payload["amount"] - advance_paid,
             "orderDate": timestamp.date().isoformat(), "expectedDelivery": payload["expectedDelivery"],
             "priority": payload.get("priority", "normal"), "notes": payload.get("notes"),
             "currentStage": "material", "stages": initial_stages(), "version": 1, "status": "active",
             "createdBy": actor["id"], "createdAt": timestamp, "updatedAt": timestamp, "closedAt": None,
         }
         self.db.orders.insert_one(document.copy())
+        self.db.customers.update_one({"id": customer["id"]}, {"$set": {"active": True, "updatedAt": timestamp}})
         self.add_audit(document["id"], actor, "order", "Order booked and preparation teams notified.", {"orderNumber": document["orderNumber"]})
         return clean(document) or {}
 
@@ -225,7 +236,10 @@ class MongoRepository:
         return [clean(item) for item in self.db.audit_events.find({"orderId": order_id}, {"_id": 0}).sort("at", -1)]
 
     def next_design_version(self, order_id: str) -> int:
-        last = self.db.design_assets.find_one({"orderId": order_id}, sort=[("version", -1)])
+        last = self.db.design_assets.find_one(
+            {"orderId": order_id, "assetType": {"$ne": "payment_proof"}},
+            sort=[("version", -1)],
+        )
         return (last.get("version", 0) if last else 0) + 1
 
     def create_asset(self, document: dict) -> dict:
@@ -236,7 +250,13 @@ class MongoRepository:
         return clean(self.db.design_assets.find_one({"id": asset_id}, {"_id": 0}))
 
     def list_assets(self, order_id: str) -> list[dict]:
-        return [clean(item) for item in self.db.design_assets.find({"orderId": order_id}, {"_id": 0}).sort("version", -1)]
+        return [
+            clean(item)
+            for item in self.db.design_assets.find(
+                {"orderId": order_id, "assetType": {"$ne": "payment_proof"}},
+                {"_id": 0},
+            ).sort("version", -1)
+        ]
 
     def update_asset(self, asset_id: str, fields: dict) -> dict | None:
         fields["updatedAt"] = now()

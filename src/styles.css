@@ -7,40 +7,80 @@
   --color-brand: #e14b2d;
   --color-brand-dark: #bd351e;
   --color-sky-soft: #e9f5ff;
+  --color-app-bg: #f4f7fb;
+  --color-surface: #ffffff;
+  --color-border-subtle: #dce4ee;
+  --color-text-primary: #172033;
+  --color-text-secondary: #52627a;
+  --color-success-soft: #ecfdf3;
+  --color-warning-soft: #fffbeb;
+  --color-danger-soft: #fef2f2;
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-:root { color: #172033; background: #f4f7fb; font-synthesis: none; }
+:root {
+  --ui-radius-card: 1rem;
+  --ui-radius-control: .75rem;
+  --ui-shadow-card: 0 1px 3px rgba(15,23,42,.05);
+  color: #172033;
+  background: #f4f7fb;
+  font-synthesis: none;
+}
 * { box-sizing: border-box; }
-html { min-width: 320px; background: #f4f7fb; }
-body { margin: 0; min-width: 320px; min-height: 100vh; line-height: 1.45; }
-button, input, select { font: inherit; }
+html { min-width: 320px; overflow-x: hidden; background: #f4f7fb; }
+body { margin: 0; min-width: 320px; min-height: 100vh; overflow-x: hidden; line-height: 1.45; }
+img, svg { max-width: 100%; }
+button, input, select, textarea { font: inherit; }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 :focus-visible { outline: 3px solid #38a3e8; outline-offset: 2px; }
 
-.surface { @apply rounded-2xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,.05)]; }
-.primary-button { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 font-semibold text-white shadow-sm transition hover:bg-brand-dark hover:shadow disabled:cursor-not-allowed disabled:opacity-50; }
-.secondary-button { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50; }
-.field { @apply min-h-12 min-w-0 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-base text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100; }
+.surface { @apply border bg-white; border-radius: var(--ui-radius-card); border-color: #dce4ee; box-shadow: var(--ui-shadow-card); }
+.primary-button { @apply inline-flex min-h-11 items-center justify-center gap-2 bg-brand px-4 py-2.5 font-bold text-white shadow-sm transition hover:bg-brand-dark hover:shadow disabled:cursor-not-allowed disabled:opacity-50; border-radius: var(--ui-radius-control); }
+.secondary-button { @apply inline-flex min-h-11 items-center justify-center gap-2 border bg-white px-4 py-2.5 font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50; border-radius: var(--ui-radius-control); }
+.field { @apply min-h-12 min-w-0 w-full border bg-white px-3.5 text-base text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100; border-radius: var(--ui-radius-control); border-color: #cbd5e1; }
 .field:hover { border-color: #94a3b8; }
 .field:disabled { @apply cursor-not-allowed bg-slate-100 text-slate-500; }
 .field[type="number"] { font-variant-numeric: tabular-nums; }
 select.field { appearance: none; padding-right: 3rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7 5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; }
 .search-control { @apply relative block w-full; }
 .search-control > svg { @apply pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500; }
-.search-control .field { @apply pl-12; }
+.field-with-leading-icon { padding-inline-start: 3.25rem; }
+.field-with-trailing-action { padding-inline-end: 3.25rem; }
+.search-control .field { padding-inline-start: 3.25rem; }
 .search-clear { @apply absolute right-1 top-1/2 z-10 grid size-10 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-navy-900; }
 .label { @apply mb-1.5 block text-sm font-semibold text-slate-700; }
 .eyebrow { @apply text-xs font-bold uppercase tracking-[.14em] text-brand; }
 .page-title { @apply text-2xl font-bold tracking-tight text-navy-900 md:text-3xl; }
+.page-copy { overflow-wrap: anywhere; }
 .status-dot { @apply size-2 rounded-full bg-current; }
+.filter-scroll { scrollbar-width: thin; scrollbar-color: #94a3b8 transparent; }
+.filter-scroll::-webkit-scrollbar { height: 6px; }
+.filter-scroll::-webkit-scrollbar-track { background: transparent; }
+.filter-scroll::-webkit-scrollbar-thumb { border-radius: 999px; background: #94a3b8; }
+.filter-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+#root, main#main-content { width: 100%; min-width: 0; max-width: 100%; }
+#root > .app-shell { width: 100%; min-width: 0; max-width: 100%; }
+main#main-content > * { min-width: 0; max-width: 100%; }
+.surface { min-width: 0; max-width: 100%; }
+input, select, textarea { max-width: 100%; }
+
+@media (max-width: 767px) {
+  .app-shell { width: 100%; max-width: 100%; overflow-x: clip; }
+  .app-shell > div, main#main-content { width: 100%; max-width: 100%; }
+  main#main-content { padding: 1rem; }
+  .filter-scroll { -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .filter-scroll::-webkit-scrollbar { height: 4px; }
+  input[type="date"], input[type="month"] { max-width: 100%; }
+}
 
 @media (max-width: 479px) {
   .surface { border-radius: 1rem; }
   .page-title { font-size: 1.75rem; line-height: 1.15; }
   .primary-button, .secondary-button { padding-inline: .875rem; }
   .field { padding-inline: .875rem; }
+  .field.field-with-leading-icon { padding-inline-start: 3.25rem; }
+  .field.field-with-trailing-action { padding-inline-end: 3.25rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

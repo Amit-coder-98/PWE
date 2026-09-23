@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     def storage_ready(self) -> bool:
         return all((self.r2_account_id, self.r2_access_key_id, self.r2_secret_access_key, self.r2_bucket))
 
+    @property
+    def cron_ready(self) -> bool:
+        value = (self.cron_secret or "").strip()
+        lowered = value.lower()
+        return len(value) >= 32 and "replace" not in lowered and "placeholder" not in lowered
+
 
 @lru_cache
 def get_settings() -> Settings:

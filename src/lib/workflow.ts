@@ -3,7 +3,7 @@ import type { Order, Role, StageKey, StageStatus } from '../types'
 export const stageInfo: Record<StageKey, { label: string; short: string; role: Role; help: string }> = {
   order: { label: 'Order booked', short: 'Order', role: 'admin', help: 'Customer order is confirmed and ready for preparation.' },
   material: { label: 'Material available', short: 'Material', role: 'cutting_master', help: 'Check and reserve the required bag material.' },
-  design: { label: 'Design approved', short: 'Design', role: 'designer', help: 'Prepare the artwork and receive approval.' },
+  design: { label: 'Design preparation', short: 'Design', role: 'designer', help: 'Prepare the final artwork. Marketing or Admin records customer approval.' },
   cutting: { label: 'Cutting', short: 'Cutting', role: 'cutting_master', help: 'Cut material to the required bag specification.' },
   plate: { label: 'Plate preparation', short: 'Plate', role: 'transport_manager', help: 'Prepare the printing plate from the approved design.' },
   printing: { label: 'Printing', short: 'Printing', role: 'printing_operator', help: 'Printing starts after cutting and plate preparation are complete.' },
@@ -12,14 +12,14 @@ export const stageInfo: Record<StageKey, { label: string; short: string; role: R
   dc: { label: 'Delivery challan', short: 'D.C.', role: 'manager', help: 'Generate the delivery challan for the packed order.' },
   billing: { label: 'Billing', short: 'Billing', role: 'accountant', help: 'Create and verify the customer invoice.' },
   payment: { label: 'Payment', short: 'Payment', role: 'accountant', help: 'Record payment received from the customer.' },
-  dispatch: { label: 'Dispatch', short: 'Dispatch', role: 'transport_manager', help: 'Record transporter and tracking information.' },
+  dispatch: { label: 'Transport and dispatch', short: 'Transport', role: 'transport_manager', help: 'Arrange transport and record dispatch details.' },
   delivery: { label: 'Delivery confirmation', short: 'Delivery', role: 'marketing', help: 'Confirm that the customer received the order.' },
   return: { label: 'Return', short: 'Return', role: 'marketing', help: 'Record returned goods only when applicable.' },
   refund: { label: 'Refund', short: 'Refund', role: 'accountant', help: 'Record an approved refund only when applicable.' },
 }
 
 export const dependencies: Partial<Record<StageKey, StageKey[]>> = {
-  material: ['order'], design: ['order'], cutting: ['order'], plate: ['order'],
+  material: ['order'], design: ['order'], cutting: ['material'], plate: ['design'],
   printing: ['material', 'cutting', 'design', 'plate'], stitching: ['printing'], packing: ['stitching'],
   dc: ['packing'], billing: ['dc'], payment: ['billing'], dispatch: ['billing'],
   delivery: ['payment', 'dispatch'], return: ['delivery'], refund: ['return'],
@@ -43,7 +43,7 @@ export function canManageStage(role: Role, stage: StageKey) {
 
 export function statusLabel(status: StageStatus) {
   return ({
-    not_started: 'Not started', waiting: 'Waiting', ready: 'Ready to start', in_progress: 'In progress',
+    not_started: 'Not started', waiting: 'Waiting', ready: 'Pending', in_progress: 'Pending',
     completed: 'Completed', blocked: 'Blocked', issue: 'Issue reported', not_applicable: 'Not applicable',
   } satisfies Record<StageStatus, string>)[status]
 }
@@ -51,7 +51,6 @@ export function statusLabel(status: StageStatus) {
 export function nextInstruction(order: Order) {
   const stage = order.currentStage
   const state = order.stages[stage]
-  if (state.status === 'blocked' || state.status === 'issue') return `Resolve the ${stageInfo[stage].short.toLowerCase()} issue before production can continue.`
-  if (state.status === 'in_progress') return `Continue ${stageInfo[stage].short.toLowerCase()} and update the completed quantity.`
-  return `The order is ready for ${stageInfo[stage].short.toLowerCase()}. The responsible team can start now.`
+  if (state.status === 'blocked' || state.status === 'issue') return `${stageInfo[stage].short} needs attention before production can continue.`
+  return `${stageInfo[stage].short} is pending with the responsible team.`
 }

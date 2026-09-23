@@ -48,13 +48,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [serviceError, setServiceError] = useState<string | null>(null);
 
   const loadData = async (user: User) => {
-    const canViewCustomers = [
-      "admin",
-      "accountant",
-      "transport_manager",
-      "marketing",
-      "dispatch_manager",
-    ].includes(user.role);
+    const canViewCustomers = ["admin", "marketing"].includes(user.role);
     const [orderData, customerData, userData] = await Promise.all([
       api.orders(),
       canViewCustomers ? api.customers() : Promise.resolve([]),
@@ -68,7 +62,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setServiceError(null);
     try {
-      const user = await api.me();
+      let user: User;
+      try {
+        user = await api.me();
+      } catch (error) {
+        // The local proxy can occasionally reject its first request while it
+        // establishes a connection. Retry once; persistent failures still use
+        // the normal service-error screen below.
+        if (!(error instanceof ApiError) || error.status !== 0) throw error;
+        user = await api.me();
+      }
       setCurrentUser(user);
       await loadData(user);
     } catch (error) {

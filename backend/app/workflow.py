@@ -7,7 +7,7 @@ from .models import Role, StageAction, StageKey, StageStatus
 
 DEPENDENCIES: dict[StageKey, list[StageKey]] = {
     StageKey.MATERIAL: [StageKey.ORDER], StageKey.DESIGN: [StageKey.ORDER],
-    StageKey.CUTTING: [StageKey.ORDER], StageKey.PLATE: [StageKey.ORDER],
+    StageKey.CUTTING: [StageKey.MATERIAL], StageKey.PLATE: [StageKey.DESIGN],
     StageKey.PRINTING: [StageKey.MATERIAL, StageKey.CUTTING, StageKey.DESIGN, StageKey.PLATE], StageKey.STITCHING: [StageKey.PRINTING],
     StageKey.PACKING: [StageKey.STITCHING], StageKey.DC: [StageKey.PACKING],
     StageKey.BILLING: [StageKey.DC], StageKey.PAYMENT: [StageKey.BILLING],
@@ -46,8 +46,6 @@ def initial_stages() -> dict[str, dict]:
                                     "completedAt": datetime.now(timezone.utc).isoformat()}
     result[StageKey.MATERIAL.value]["status"] = StageStatus.READY.value
     result[StageKey.DESIGN.value]["status"] = StageStatus.READY.value
-    result[StageKey.CUTTING.value]["status"] = StageStatus.READY.value
-    result[StageKey.PLATE.value]["status"] = StageStatus.READY.value
     return result
 
 
@@ -76,25 +74,11 @@ def refresh_ready_states(order: dict) -> None:
     order["currentStage"] = (candidates[0] if candidates else StageKey.DELIVERY).value
 
 
-def apply_action(order: dict, stage: StageKey, action: StageAction, quantity: int | None, note: str | None, data: dict) -> str:
+def apply_action(order: dict, stage: StageKey, action: StageAction, note: str | None, data: dict) -> str:
     state = order["stages"][stage.value]
     current = StageStatus(state["status"])
     now = datetime.now(timezone.utc).isoformat()
-    if stage == StageKey.DESIGN and action == StageAction.COMPLETE:
-        raise HTTPException(409, "Design must be approved or marked as having no customer image.")
-    if action == StageAction.START:
-        if current != StageStatus.READY or not ready(order, stage):
-            raise HTTPException(409, "Previous work is not complete. This step cannot start yet.")
-        state.update(status=StageStatus.IN_PROGRESS.value, startedAt=now)
-        message = f"Started {stage.value}."
-    elif action == StageAction.PROGRESS:
-        if current != StageStatus.IN_PROGRESS:
-            raise HTTPException(409, "Start this work before updating progress.")
-        if quantity is None or quantity > order["quantity"]:
-            raise HTTPException(422, "Completed quantity must not exceed the order quantity.")
-        state.update(completedQuantity=quantity, progress=round(quantity / order["quantity"] * 100), data=data)
-        message = f"Updated {stage.value} progress to {quantity} of {order['quantity']}."
-    elif action == StageAction.BLOCK:
+    if action == StageAction.BLOCK:
         if not note:
             raise HTTPException(422, "Explain the issue so the next person knows what to resolve.")
         state.update(status=StageStatus.BLOCKED.value, note=note)
@@ -105,9 +89,9 @@ def apply_action(order: dict, stage: StageKey, action: StageAction, quantity: in
         state.update(status=StageStatus.READY.value, note=note or "Issue resolved.")
         message = f"Resolved the {stage.value} issue."
     else:
-        if current != StageStatus.IN_PROGRESS:
-            raise HTTPException(409, "Start this work before marking it complete.")
-        state.update(status=StageStatus.COMPLETED.value, completedAt=now, progress=100,
+        if current not in {StageStatus.READY, StageStatus.IN_PROGRESS, StageStatus.BLOCKED, StageStatus.ISSUE} or not ready(order, stage):
+            raise HTTPException(409, "This task is not ready to complete yet.")
+        state.update(status=StageStatus.COMPLETED.value, startedAt=state.get("startedAt", now), completedAt=now,
                      completedQuantity=order["quantity"], data=data, note=note)
         message = f"Completed {stage.value}."
     refresh_ready_states(order)

@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -104,6 +104,8 @@ class CustomerCreate(BaseModel):
     companyName: str = Field(min_length=2, max_length=150)
     contactPerson: str = Field(min_length=2, max_length=100)
     phone: str = Field(min_length=7, max_length=20)
+    alternativePhone: str | None = Field(default=None, min_length=7, max_length=20)
+    gstNumber: str | None = Field(default=None, max_length=20)
     email: EmailStr | None = None
     address: str = Field(min_length=5, max_length=500)
 
@@ -120,24 +122,52 @@ class OrderCreate(BaseModel):
     product: str = Field(min_length=2, max_length=200)
     quantity: int = Field(gt=0, le=10_000_000)
     amount: int = Field(ge=0)
+    bagType: str | None = Field(default=None, max_length=100)
+    bagSize: str | None = Field(default=None, max_length=100)
+    printingColor: str | None = Field(default=None, max_length=100)
+    ratePerBag: int | None = Field(default=None, ge=0)
+    advancePaid: int = Field(default=0, ge=0)
+    primaryPhone: str | None = Field(default=None, min_length=7, max_length=20)
+    alternativePhone: str | None = Field(default=None, min_length=7, max_length=20)
+    gstNumber: str | None = Field(default=None, max_length=20)
     expectedDelivery: str
     priority: Priority = Priority.NORMAL
     notes: str | None = Field(default=None, max_length=1000)
 
 
+class OrderUpdate(BaseModel):
+    customerId: str
+    product: str = Field(min_length=2, max_length=200)
+    quantity: int = Field(gt=0, le=10_000_000)
+    amount: int = Field(ge=0)
+    bagType: str | None = Field(default=None, max_length=100)
+    bagSize: str | None = Field(default=None, max_length=100)
+    printingColor: str | None = Field(default=None, max_length=100)
+    ratePerBag: int | None = Field(default=None, ge=0)
+    advancePaid: int = Field(default=0, ge=0)
+    primaryPhone: str | None = Field(default=None, min_length=7, max_length=20)
+    alternativePhone: str | None = Field(default=None, min_length=7, max_length=20)
+    gstNumber: str | None = Field(default=None, max_length=20)
+    expectedDelivery: str
+    priority: Priority = Priority.NORMAL
+    notes: str | None = Field(default=None, max_length=1000)
+    expectedVersion: int = Field(ge=1)
+
+
 class StageAction(str, Enum):
-    START = "start"
     COMPLETE = "complete"
-    PROGRESS = "progress"
     BLOCK = "block"
     RESOLVE = "resolve"
 
 
 class StageUpdateRequest(BaseModel):
     action: StageAction
-    completedQuantity: int | None = Field(default=None, ge=0)
     note: str | None = Field(default=None, max_length=500)
     data: dict[str, Any] = Field(default_factory=dict)
+    expectedVersion: int = Field(ge=1)
+
+
+class MaterialAvailabilityRequest(BaseModel):
     expectedVersion: int = Field(ge=1)
 
 
@@ -155,6 +185,7 @@ class UploadIntentRequest(BaseModel):
     fileName: str = Field(min_length=1, max_length=200)
     contentType: str
     size: int = Field(gt=0, le=10 * 1024 * 1024)
+    assetType: Literal["design", "payment_proof"] = "design"
 
     @field_validator("contentType")
     @classmethod
@@ -203,9 +234,17 @@ class OrderDocument(BaseModel):
     customer: str
     contactPerson: str
     phone: str
+    alternativePhone: str | None = None
+    gstNumber: str | None = None
     product: str
     quantity: int
     amount: int
+    bagType: str | None = None
+    bagSize: str | None = None
+    printingColor: str | None = None
+    ratePerBag: int | None = None
+    advancePaid: int = 0
+    remainingAmount: int = 0
     orderDate: str
     expectedDelivery: str
     priority: Priority

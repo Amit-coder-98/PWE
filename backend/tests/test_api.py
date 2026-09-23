@@ -42,7 +42,11 @@ def system():
         "department": "Administration", "initials": "TA", "passwordHash": PasswordHash.recommended().hash("Temporary123!"),
         "active": True, "mustChangePassword": False, "failedLoginCount": 0, "createdAt": timestamp, "updatedAt": timestamp,
     })
-    settings = Settings(jwt_secret="test-secret-that-is-longer-than-thirty-two-characters", cookie_secure=False, cron_secret="cron-test-secret")
+    settings = Settings(
+        jwt_secret="test-secret-that-is-longer-than-thirty-two-characters",
+        cookie_secure=False,
+        cron_secret="cron-test-secret-that-is-longer-than-thirty-two-characters",
+    )
     client = TestClient(create_app(settings, repository, FakeStorage()))
     return client, repository
 
@@ -56,12 +60,14 @@ def login(client: TestClient, email="admin@test.example.com", password="Temporar
 def create_order(client: TestClient, headers: dict):
     customer = client.post("/api/customers", headers=headers, json={
         "companyName": "Practical Test Industries", "contactPerson": "Ravi Patil", "phone": "9876543210",
+        "alternativePhone": "9876500000", "gstNumber": "27ABCDE1234F1Z5",
         "email": "ravi@example.com", "address": "MIDC Industrial Area, Pune",
     })
     assert customer.status_code == 200, customer.text
     order = client.post("/api/orders", headers=headers, json={
         "customerId": customer.json()["id"], "product": "Printed Woven Bag", "quantity": 500,
-        "amount": 245000, "expectedDelivery": "2026-09-30", "priority": "high",
+        "amount": 245000, "ratePerBag": 490, "advancePaid": 5000,
+        "expectedDelivery": "2026-09-30", "priority": "high",
     })
     assert order.status_code == 200, order.text
     return order.json()
@@ -92,8 +98,8 @@ def test_customer_order_and_parallel_workflow(system):
     order = create_order(client, headers)
     assert order["stages"]["material"]["status"] == "ready"
     assert order["stages"]["design"]["status"] == "ready"
-    assert order["stages"]["cutting"]["status"] == "ready"
-    assert order["stages"]["plate"]["status"] == "ready"
+    assert order["stages"]["cutting"]["status"] == "waiting"
+    assert order["stages"]["plate"]["status"] == "waiting"
     assert order["stages"]["printing"]["status"] == "waiting"
 
 
@@ -122,19 +128,136 @@ def test_csrf_and_role_protection(system):
     client, repository = system
     headers = login(client)
     order = create_order(client, headers)
-    assert client.post(f"/api/orders/{order['id']}/stages/material", json={"action": "start", "expectedVersion": 1}).status_code == 403
-    admin_denied = client.post(f"/api/orders/{order['id']}/stages/material", headers=headers, json={"action": "start", "expectedVersion": 1})
+    assert client.post(f"/api/orders/{order['id']}/stages/material", json={"action": "complete", "expectedVersion": 1}).status_code == 403
+    admin_denied = client.post(f"/api/orders/{order['id']}/stages/material", headers=headers, json={"action": "complete", "expectedVersion": 1})
     assert admin_denied.status_code == 403
     add_staff(repository, "designer", "designer", "designer@test.example.com")
     client.post("/api/auth/logout", headers=headers)
     designer_headers = login(client, "designer@test.example.com")
-    denied = client.post(f"/api/orders/{order['id']}/stages/material", headers=designer_headers, json={"action": "start", "expectedVersion": 1})
+    denied = client.post(f"/api/orders/{order['id']}/stages/material", headers=designer_headers, json={"action": "complete", "expectedVersion": 1})
     assert denied.status_code == 403
     assert client.get("/api/customers").status_code == 403
     visible_order = client.get(f"/api/orders/{order['id']}")
     assert visible_order.status_code == 200
     assert visible_order.json()["amount"] == 0
+    assert visible_order.json()["ratePerBag"] is None
+    assert visible_order.json()["advancePaid"] == 0
+    assert visible_order.json()["remainingAmount"] == 0
     assert visible_order.json()["phone"] == ""
+    assert visible_order.json()["alternativePhone"] is None
+    assert visible_order.json()["gstNumber"] is None
+    assert all(event["details"] == {} for event in visible_order.json()["activity"])
+
+
+def test_worker_order_api_is_limited_to_current_assigned_work(system):
+    client, repository = system
+    admin_headers = login(client)
+    order = create_order(client, admin_headers)
+    add_staff(repository, "designer", "designer", "designer@test.example.com")
+    add_staff(repository, "printer", "printing_operator", "printer@test.example.com")
+
+    client.post("/api/auth/logout", headers=admin_headers)
+    printer_headers = login(client, "printer@test.example.com")
+    assert client.get("/api/orders").json() == []
+    assert client.get(f"/api/orders/{order['id']}").status_code == 403
+
+    client.post("/api/auth/logout", headers=printer_headers)
+    designer_headers = login(client, "designer@test.example.com")
+    listed = client.get("/api/orders")
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()] == [order["id"]]
+
+    completed = client.post(
+        f"/api/orders/{order['id']}/stages/design",
+        headers=designer_headers,
+        json={"action": "complete", "expectedVersion": order["version"]},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["stages"]["design"]["status"] == "completed"
+    assert completed.json()["stages"]["plate"]["status"] == "ready"
+    assert client.get("/api/orders").json() == []
+    assert client.get(f"/api/orders/{order['id']}").status_code == 403
+
+
+def test_only_admin_and_marketing_can_list_customers(system):
+    client, repository = system
+    admin_headers = login(client)
+    create_order(client, admin_headers)
+    add_staff(repository, "accountant", "accountant", "accountant@test.example.com")
+    add_staff(repository, "marketing", "marketing", "marketing@test.example.com")
+
+    client.post("/api/auth/logout", headers=admin_headers)
+    accountant_headers = login(client, "accountant@test.example.com")
+    assert client.get("/api/customers").status_code == 403
+
+    client.post("/api/auth/logout", headers=accountant_headers)
+    login(client, "marketing@test.example.com")
+    assert client.get("/api/customers").status_code == 200
+
+
+def test_complete_role_by_role_production_workflow(system):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    accounts = {
+        "cutting_master": "cutting@test.example.com",
+        "designer": "designer@test.example.com",
+        "transport_manager": "transport@test.example.com",
+        "printing_operator": "printing@test.example.com",
+        "manager": "manager@test.example.com",
+        "accountant": "accountant@test.example.com",
+        "marketing": "marketing@test.example.com",
+    }
+    for role, email in accounts.items():
+        add_staff(repository, role, role, email)
+
+    def sign_in(role: str, previous_headers: dict) -> dict:
+        client.post("/api/auth/logout", headers=previous_headers)
+        next_headers = login(client, accounts[role])
+        assert client.get("/api/orders").status_code == 200
+        return next_headers
+
+    def complete(stage: str, current: dict, current_headers: dict, data: dict | None = None) -> dict:
+        response = client.post(
+            f"/api/orders/{current['id']}/stages/{stage}",
+            headers=current_headers,
+            json={"action": "complete", "data": data or {}, "expectedVersion": current["version"]},
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    headers = sign_in("cutting_master", headers)
+    order = complete("material", order, headers, {"materialAvailable": "yes"})
+    assert order["stages"]["cutting"]["status"] == "ready"
+    order = complete("cutting", order, headers)
+
+    headers = sign_in("designer", headers)
+    order = complete("design", order, headers)
+    assert order["stages"]["plate"]["status"] == "ready"
+
+    headers = sign_in("transport_manager", headers)
+    order = complete("plate", order, headers)
+    assert order["stages"]["printing"]["status"] == "ready"
+
+    headers = sign_in("printing_operator", headers)
+    order = complete("printing", order, headers, {"qualityChecked": True})
+
+    headers = sign_in("manager", headers)
+    order = complete("stitching", order, headers)
+    order = complete("packing", order, headers)
+    order = complete("dc", order, headers)
+
+    headers = sign_in("accountant", headers)
+    order = complete("billing", order, headers, {"invoiceNumber": "INV-1001"})
+    order = complete("payment", order, headers, {"paymentReference": "PAY-1001"})
+
+    headers = sign_in("transport_manager", headers)
+    order = complete("dispatch", order, headers, {"vehicleNumber": "MH13AB1234"})
+
+    headers = sign_in("marketing", headers)
+    order = complete("delivery", order, headers, {"receivedBy": "Ravi Patil"})
+    assert order["status"] == "completed"
+    assert order["stages"]["delivery"]["status"] == "completed"
 
 
 def test_marketing_can_book_orders_and_admin_can_delete_unused_users(system):
@@ -160,6 +283,39 @@ def test_marketing_can_book_orders_and_admin_can_delete_unused_users(system):
         "amount": 25000, "expectedDelivery": "2026-09-30", "priority": "normal",
     })
     assert order.status_code == 200, order.text
+
+
+def test_admin_can_edit_active_order_booking_details(system):
+    client, _ = system
+    headers = login(client)
+    order = create_order(client, headers)
+    response = client.patch(
+        f"/api/orders/{order['id']}",
+        headers=headers,
+        json={
+            "customerId": order["customerId"],
+            "product": "Updated Printed Woven Bag",
+            "quantity": 600,
+            "amount": 300000,
+            "bagType": "PP woven bag",
+            "bagSize": "25 kg",
+            "printingColor": "Blue",
+            "ratePerBag": 500,
+            "advancePaid": 50000,
+            "primaryPhone": "9876543210",
+            "alternativePhone": "9876500000",
+            "gstNumber": "27ABCDE1234F1Z5",
+            "expectedDelivery": "2026-10-05",
+            "priority": "urgent",
+            "notes": "Updated customer instruction",
+            "expectedVersion": order["version"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved["quantity"] == 600
+    assert saved["remainingAmount"] == 250000
+    assert saved["version"] == 2
 
 
 def test_no_image_completes_design_but_plate_remains(system):
@@ -191,6 +347,57 @@ def test_design_upload_and_customer_rejection_requires_reason(system):
     assert repository.get_asset(asset_id)["status"] == "changes_requested"
 
 
+def test_private_asset_view_requires_order_and_role_access(system):
+    client, repository = system
+    admin_headers = login(client)
+    order = create_order(client, admin_headers)
+    design = client.post(
+        f"/api/orders/{order['id']}/design-assets/upload-intent",
+        headers=admin_headers,
+        json={"fileName": "bag.png", "contentType": "image/png", "size": 2048},
+    ).json()["asset"]
+    assert client.post(f"/api/design-assets/{design['id']}/complete", headers=admin_headers).status_code == 200
+    proof = client.post(
+        f"/api/orders/{order['id']}/design-assets/upload-intent",
+        headers=admin_headers,
+        json={"fileName": "proof.png", "contentType": "image/png", "size": 1024, "assetType": "payment_proof"},
+    ).json()["asset"]
+    assert client.post(f"/api/design-assets/{proof['id']}/complete", headers=admin_headers).status_code == 200
+    add_staff(repository, "designer", "designer", "designer@test.example.com")
+
+    client.post("/api/auth/logout", headers=admin_headers)
+    login(client, "designer@test.example.com")
+    assert client.get(f"/api/design-assets/{design['id']}/view-url").status_code == 200
+    assert client.get(f"/api/design-assets/{proof['id']}/view-url").status_code == 403
+
+
+def test_marketing_can_upload_private_payment_proof_without_creating_design_version(system):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    add_staff(repository, "marketing", "marketing", "marketing@test.example.com")
+    client.post("/api/auth/logout", headers=headers)
+    marketing_headers = login(client, "marketing@test.example.com")
+
+    intent = client.post(
+        f"/api/orders/{order['id']}/design-assets/upload-intent",
+        headers=marketing_headers,
+        json={
+            "fileName": "advance-receipt.png",
+            "contentType": "image/png",
+            "size": 2048,
+            "assetType": "payment_proof",
+        },
+    )
+    assert intent.status_code == 200, intent.text
+    proof_id = intent.json()["asset"]["id"]
+    assert intent.json()["asset"]["assetType"] == "payment_proof"
+    assert client.post(f"/api/design-assets/{proof_id}/complete", headers=marketing_headers).status_code == 200
+    assert repository.get_asset(proof_id)["status"] == "available"
+    assert repository.list_assets(order["id"]) == []
+    assert repository.list_audit(order["id"])[0]["message"] == "Uploaded advance payment proof."
+
+
 def test_workflow_confirmation_endpoint_version_conflict(system):
     client, repository = system
     headers = login(client)
@@ -198,8 +405,10 @@ def test_workflow_confirmation_endpoint_version_conflict(system):
     add_staff(repository, "inventory", "inventory_manager", "inventory@test.example.com")
     client.post("/api/auth/logout", headers=headers)
     headers = login(client, "inventory@test.example.com")
-    started = client.post(f"/api/orders/{order['id']}/stages/material", headers=headers, json={"action": "start", "expectedVersion": 1})
-    assert started.status_code == 200
+    legacy_action = client.post(f"/api/orders/{order['id']}/stages/material", headers=headers, json={"action": "start", "expectedVersion": 1})
+    assert legacy_action.status_code == 422
+    completed = client.post(f"/api/orders/{order['id']}/stages/material", headers=headers, json={"action": "complete", "expectedVersion": 1})
+    assert completed.status_code == 200
     stale = client.post(f"/api/orders/{order['id']}/stages/material", headers=headers, json={"action": "complete", "expectedVersion": 1})
     assert stale.status_code == 409
 
@@ -223,5 +432,24 @@ def test_cleanup_endpoint_uses_authenticated_get(system):
     client, _ = system
     assert client.post("/api/cron/cleanup").status_code == 405
     assert client.get("/api/cron/cleanup").status_code == 401
-    response = client.get("/api/cron/cleanup", headers={"Authorization": "Bearer cron-test-secret"})
+    response = client.get(
+        "/api/cron/cleanup",
+        headers={"Authorization": "Bearer cron-test-secret-that-is-longer-than-thirty-two-characters"},
+    )
     assert response.status_code == 200, response.text
+
+
+def test_cleanup_rejects_placeholder_secret():
+    database = mongomock.MongoClient(tz_aware=True).prabodhan_bag_test
+    repository = MongoRepository(Settings(), database=database)
+    settings = Settings(
+        jwt_secret="test-secret-that-is-longer-than-thirty-two-characters",
+        cookie_secure=False,
+        cron_secret="REPLACE_WITH_A_NEW_LONG_RANDOM_SECRET_AT_LEAST_32_CHARACTERS",
+    )
+    client = TestClient(create_app(settings, repository, FakeStorage()))
+    response = client.get(
+        "/api/cron/cleanup",
+        headers={"Authorization": f"Bearer {settings.cron_secret}"},
+    )
+    assert response.status_code == 503
