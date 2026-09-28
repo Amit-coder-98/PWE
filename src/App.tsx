@@ -414,20 +414,17 @@ function PasswordChangePage() {
 }
 
 const nav = [
-  { to: "/", label: "Dashboard", mr: "मुख्यपृष्ठ", icon: LayoutDashboard },
-  { to: "/orders", label: "Orders", mr: "ऑर्डर", icon: ClipboardList },
-  { to: "/customers", label: "Customers", mr: "ग्राहक", icon: Building2 },
-  { to: "/queue", label: "My Work", mr: "माझे काम", icon: Factory },
-  { to: "/team", label: "Team", mr: "टीम", icon: Users },
-  { to: "/more", label: "More", mr: "अधिक", icon: Menu },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/orders", label: "Orders", icon: ClipboardList },
+  { to: "/customers", label: "Customers", icon: Building2 },
+  { to: "/queue", label: "My Work", icon: Factory },
+  { to: "/team", label: "Team", icon: Users },
+  { to: "/more", label: "More", icon: Menu },
 ];
 function Shell({ children }: { children: ReactNode }) {
   const { currentUser, orders, logout } = useApp();
   const [drawer, setDrawer] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
-  const [lang, setLang] = useState<"en" | "mr">(() =>
-    localStorage.getItem("pb-language") === "mr" ? "mr" : "en",
-  );
   if (!currentUser) return null;
   const isSimpleWorker = !["admin", "marketing"].includes(currentUser.role);
   const canViewCustomers = [
@@ -449,11 +446,6 @@ function Shell({ children }: { children: ReactNode }) {
       ["blocked", "issue"].includes(state.status),
     ),
   ).length;
-  const toggleLanguage = () => {
-    const next = lang === "en" ? "mr" : "en";
-    setLang(next);
-    localStorage.setItem("pb-language", next);
-  };
   return (
     <div className="app-shell min-h-screen w-full min-w-0 bg-[#f4f7fb] pb-24 md:pb-0">
       <ToastHost />
@@ -465,7 +457,7 @@ function Shell({ children }: { children: ReactNode }) {
           <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-[.14em] text-slate-500">Workspace</p>
           {visibleNav
             .filter((item) => item.to !== "/more")
-            .map(({ to, label, mr, icon: Icon }) => (
+            .map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -475,7 +467,7 @@ function Shell({ children }: { children: ReactNode }) {
                 }
               >
                 <Icon className="size-5" />
-                {lang === "mr" ? mr : label}
+                {label}
               </NavLink>
             ))}
         </nav>
@@ -492,13 +484,7 @@ function Shell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <button
-            className="mt-3 min-h-11 w-full rounded-lg px-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
-            onClick={toggleLanguage}
-          >
-            {lang === "en" ? "मराठीमध्ये पहा" : "View in English"}
-          </button>
-          <button
-            className="mt-1 flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white"
+            className="mt-3 flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white"
             onClick={() => setLogoutConfirm(true)}
           >
             <LogOut className="size-4" />
@@ -520,9 +506,7 @@ function Shell({ children }: { children: ReactNode }) {
               {currentUser.department}
             </p>
             <p className="font-bold text-navy-900">
-              {lang === "mr"
-                ? `नमस्कार, ${currentUser.name.split(" ")[0]}`
-                : `Good day, ${currentUser.name.split(" ")[0]}`}
+              {`Good day, ${currentUser.name.split(" ")[0]}`}
             </p>
           </div>
           <Link
@@ -541,7 +525,7 @@ function Shell({ children }: { children: ReactNode }) {
         </main>
       </div>
       <nav className={`fixed inset-x-0 bottom-0 z-30 grid ${isSimpleWorker ? "grid-cols-3" : "grid-cols-5"} border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_20px_rgba(15,23,42,.08)] md:hidden`} aria-label="Mobile navigation">
-        {mobileNav.slice(0, isSimpleWorker ? 2 : 4).map(({ to, label, mr, icon: Icon }) => (
+        {mobileNav.slice(0, isSimpleWorker ? 2 : 4).map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -551,7 +535,7 @@ function Shell({ children }: { children: ReactNode }) {
             }
           >
             <Icon className="size-5" />
-            {lang === "mr" ? mr : label}
+            {label}
           </NavLink>
         ))}
         <NavLink
@@ -561,7 +545,7 @@ function Shell({ children }: { children: ReactNode }) {
           }
         >
           <Menu className="size-5" />
-          {lang === "mr" ? "अधिक" : "More"}
+          More
         </NavLink>
       </nav>
       {drawer && (
@@ -583,7 +567,7 @@ function Shell({ children }: { children: ReactNode }) {
               </button>
             </div>
             <nav className="mt-6 flex-1 space-y-2 overflow-y-auto" aria-label="Mobile menu">
-              {visibleNav.map(({ to, label, mr, icon: Icon }) => (
+              {visibleNav.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -593,18 +577,12 @@ function Shell({ children }: { children: ReactNode }) {
                   }
                 >
                   <Icon className="size-5" />
-                  {lang === "mr" ? mr : label}
+                  {label}
                 </NavLink>
               ))}
             </nav>
             <button
-              className="secondary-button mt-6 w-full"
-              onClick={toggleLanguage}
-            >
-              {lang === "en" ? "मराठी" : "English"}
-            </button>
-            <button
-              className="secondary-button mt-3 w-full text-red-700"
+              className="secondary-button mt-6 w-full text-red-700"
               onClick={() => {
                 setDrawer(false);
                 setLogoutConfirm(true);
@@ -2083,12 +2061,10 @@ function NewOrderPage() {
   );
 }
 
-function DetailedCompletionForm({
-  stage,
+function DeliveryCompletionForm({
   order,
   onComplete,
 }: {
-  stage: StageKey;
   order: Order;
   onComplete: (data: Record<string, unknown>) => void;
 }) {
@@ -2101,25 +2077,14 @@ function DetailedCompletionForm({
     );
     onComplete(data);
   };
-  const title = stage === "billing" ? "Billing details" : stage === "payment" ? "Payment details" : "Delivery confirmation";
   return (
     <form className="rounded-xl border border-sky-200 bg-sky-50 p-4" onSubmit={submit}>
-      <p className="font-bold text-navy-900">{title}</p>
+      <p className="font-bold text-navy-900">Delivery confirmation</p>
       <p className="mt-1 text-sm text-slate-600">Record the details before completing this task.</p>
-      {stage === "billing" && <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Field name="invoiceNumber" label="Invoice number" required />
-        <Field name="invoiceDate" label="Invoice date" type="date" defaultValue={today} required />
-        <Field name="invoiceAmount" label="Invoice amount (₹)" type="number" min="0" defaultValue={String(order.amount)} required />
-      </div>}
-      {stage === "payment" && <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Field name="paymentReference" label="Payment reference" required />
-        <Field name="paymentDate" label="Payment date" type="date" defaultValue={today} required />
-        <Field name="paidAmount" label="Amount received (₹)" type="number" min="0" defaultValue={String(order.remainingAmount ?? Math.max(0, order.amount - (order.advancePaid ?? 0)))} required />
-      </div>}
-      {stage === "delivery" && <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Field name="receivedBy" label="Received by" defaultValue={order.contactPerson} required />
         <Field name="deliveryDate" label="Delivery date" type="date" defaultValue={today} required />
-      </div>}
+      </div>
       <label className="label mt-4">Note (optional)</label>
       <textarea className="field mt-1 min-h-20 py-3" name="note" placeholder="Add any helpful information" />
       <button className="primary-button mt-4 w-full">Save and complete</button>
@@ -2169,7 +2134,7 @@ function OrderDetailPage() {
   const CurrentRoleIcon = currentVisual.icon;
   const canEditOrder = ["admin", "marketing"].includes(currentUser.role);
   const canManageDesignApproval = ["admin", "marketing"].includes(currentUser.role);
-  const usesDetailedTaskScreen = ["accountant", "marketing"].includes(currentUser.role);
+  const usesDetailedTaskScreen = currentUser.role === "marketing";
   const openOrderEdit = () => {
     setEditError("");
     setEditQuantity(String(order.quantity));
@@ -2509,9 +2474,8 @@ function OrderDetailPage() {
                   </div>
                 </div>
               )}
-              {manage && usesDetailedTaskScreen && ["billing", "payment", "delivery"].includes(selected) && ["ready", "in_progress", "blocked", "issue"].includes(state.status) && (
-                <DetailedCompletionForm
-                  stage={selected}
+              {manage && usesDetailedTaskScreen && selected === "delivery" && ["ready", "in_progress", "blocked", "issue"].includes(state.status) && (
+                <DeliveryCompletionForm
                   order={order}
                   onComplete={(data) => void performTaskAction("complete", data)}
                 />

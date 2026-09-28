@@ -248,8 +248,10 @@ def test_complete_role_by_role_production_workflow(system):
     order = complete("dc", order, headers)
 
     headers = sign_in("accountant", headers)
-    order = complete("billing", order, headers, {"invoiceNumber": "INV-1001"})
-    order = complete("payment", order, headers, {"paymentReference": "PAY-1001"})
+    order = complete("billing", order, headers)
+    assert order["stages"]["billing"]["data"] == {}
+    order = complete("payment", order, headers)
+    assert order["stages"]["payment"]["data"] == {}
 
     headers = sign_in("transport_manager", headers)
     order = complete("dispatch", order, headers, {"vehicleNumber": "MH13AB1234"})
