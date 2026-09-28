@@ -27,6 +27,22 @@ export const dependencies: Partial<Record<StageKey, StageKey[]>> = {
 
 export const productionStages: StageKey[] = ['material', 'design', 'cutting', 'plate', 'printing', 'stitching', 'packing', 'dc', 'billing', 'payment', 'dispatch', 'delivery']
 
+export function orderNotifications(orders: Order[], role: Role) {
+  const supervisor = role === 'admin' || role === 'marketing'
+  const assignedRole = operatingRole(role)
+  return orders.flatMap((order) => {
+    if (order.status !== 'active') return []
+    return productionStages.flatMap((stage) => {
+      const state = order.stages[stage]
+      if (!state) return []
+      const assigned = stageInfo[stage].role === assignedRole
+      const problem = state.status === 'blocked' || state.status === 'issue'
+      if ((!assigned && !supervisor) || (!problem && !(assigned && ['ready', 'in_progress'].includes(state.status)))) return []
+      return [{ order, stage, state, problem }]
+    })
+  }).sort((a, b) => Number(b.problem) - Number(a.problem) || a.order.expectedDelivery.localeCompare(b.order.expectedDelivery))
+}
+
 export function isReady(order: Order, stage: StageKey) {
   return (dependencies[stage] ?? []).every((key) => order.stages[key].status === 'completed')
 }

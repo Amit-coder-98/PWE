@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Link,
   Navigate,
@@ -55,6 +55,7 @@ import {
   canManageStage,
   nextInstruction,
   operatingRole,
+  orderNotifications,
   productionStages,
   stageInfo,
 } from "./lib/workflow";
@@ -422,9 +423,27 @@ const nav = [
   { to: "/more", label: "More", icon: Menu },
 ];
 function Shell({ children }: { children: ReactNode }) {
-  const { currentUser, orders, logout } = useApp();
+  const { currentUser, orders, logout, refreshOrders } = useApp();
   const [drawer, setDrawer] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const alertsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!alertsOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!alertsRef.current?.contains(event.target as Node)) setAlertsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAlertsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [alertsOpen]);
   if (!currentUser) return null;
   const isSimpleWorker = !["admin", "marketing"].includes(currentUser.role);
   const canViewCustomers = [
@@ -441,11 +460,22 @@ function Shell({ children }: { children: ReactNode }) {
           (item.to !== "/customers" || canViewCustomers),
       );
   const mobileNav = visibleNav.filter((item) => item.to !== "/more");
-  const issues = orders.filter((order) =>
-    Object.values(order.stages).some((state) =>
-      ["blocked", "issue"].includes(state.status),
-    ),
-  ).length;
+  const alerts = orderNotifications(orders, currentUser.role);
+  const openAlerts = async () => {
+    if (alertsOpen) {
+      setAlertsOpen(false);
+      return;
+    }
+    setAlertsOpen(true);
+    setAlertsLoading(true);
+    try {
+      await refreshOrders();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not refresh notifications.", "error");
+    } finally {
+      setAlertsLoading(false);
+    }
+  };
   return (
     <div className="app-shell min-h-screen w-full min-w-0 bg-[#f4f7fb] pb-24 md:pb-0">
       <ToastHost />
@@ -509,16 +539,67 @@ function Shell({ children }: { children: ReactNode }) {
               {`Good day, ${currentUser.name.split(" ")[0]}`}
             </p>
           </div>
-          <Link
-            to="/orders"
-            className="relative ml-auto grid size-11 place-items-center rounded-xl border border-slate-200 text-navy-900 transition hover:border-slate-300 hover:bg-slate-50"
-            aria-label={`${issues} alerts`}
-          >
-            <Bell className="size-5" />
-            {issues > 0 && (
-              <span className="absolute right-1 top-1 size-2.5 rounded-full bg-red-500" />
+          <div className="relative ml-auto" ref={alertsRef}>
+            <button
+              type="button"
+              className="relative grid size-11 place-items-center rounded-xl border border-slate-200 text-navy-900 transition hover:border-slate-300 hover:bg-slate-50"
+              aria-label={`Notifications, ${alerts.length} current item${alerts.length === 1 ? "" : "s"}`}
+              aria-expanded={alertsOpen}
+              aria-controls="order-notifications"
+              onClick={() => void openAlerts()}
+            >
+              <Bell className="size-5" />
+              {alerts.length > 0 && (
+                <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                  {alerts.length > 99 ? "99+" : alerts.length}
+                </span>
+              )}
+            </button>
+            {alertsOpen && (
+              <section
+                id="order-notifications"
+                aria-label="Order notifications"
+                className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                  <div>
+                    <h2 className="font-bold text-navy-900">Notifications</h2>
+                    <p className="text-xs text-slate-500">Current work and orders needing attention</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100"
+                    aria-label="Close notifications"
+                    onClick={() => setAlertsOpen(false)}
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+                {alertsLoading && <p className="px-4 py-2 text-xs text-slate-500" role="status">Checking latest orders…</p>}
+                <div className="max-h-[min(65vh,30rem)] overflow-y-auto">
+                  {alerts.length === 0 ? (
+                    <p className="px-4 py-6 text-sm text-slate-600">No work or issues need your attention right now.</p>
+                  ) : alerts.map(({ order, stage, state, problem }) => (
+                    <Link
+                      key={`${order.id}-${stage}`}
+                      to={`/orders/${order.id}?stage=${stage}`}
+                      className="block border-b border-slate-100 px-4 py-3 transition hover:bg-slate-50 last:border-b-0"
+                      onClick={() => setAlertsOpen(false)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 font-semibold text-navy-900">{order.customer}</span>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${problem ? "bg-red-50 text-red-700" : "bg-sky-50 text-sky-700"}`}>
+                          {problem ? "Needs attention" : "Pending"}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-sm text-slate-700">{order.orderNumber} · {stage === "material" && problem ? "Material unavailable" : stageInfo[stage].label}</p>
+                      {state.note && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{state.note}</p>}
+                    </Link>
+                  ))}
+                </div>
+              </section>
             )}
-          </Link>
+          </div>
         </header>
         <main className="mx-auto w-full min-w-0 max-w-[1440px] p-4 md:p-7" id="main-content">
           {children}
@@ -2095,6 +2176,7 @@ function DeliveryCompletionForm({
 function OrderDetailPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const { key: routeKey } = useLocation();
   const { currentUser, orders, updateStage, reload } = useApp();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(
@@ -2104,6 +2186,7 @@ function OrderDetailPage() {
     const stage = searchParams.get("stage");
     return stage && stage in stageInfo ? (stage as StageKey) : null;
   });
+  const requestedStage = searchParams.get("stage");
   const [cancelPending, setCancelPending] = useState(false);
   const [materialAvailableConfirm, setMaterialAvailableConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -2115,6 +2198,11 @@ function OrderDetailPage() {
   const [editRate, setEditRate] = useState("");
   const [editAdvance, setEditAdvance] = useState("");
   useEffect(() => {
+    // Keep deep links in sync even when the user is already viewing this order.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelected(requestedStage && requestedStage in stageInfo ? (requestedStage as StageKey) : null);
+  }, [requestedStage, routeKey]);
+  useEffect(() => {
     if (!id) return;
     // Loading fresh server state when the route changes is intentional.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -2124,7 +2212,7 @@ function OrderDetailPage() {
       .then(setOrder)
       .catch((error) => toast(error.message, "error"))
       .finally(() => setBusy(false));
-  }, [id]);
+  }, [id, routeKey]);
   if (busy && !order) return <LoadingScreen />;
   if (!order || !currentUser) return <Navigate to="/orders" replace />;
   const state = selected ? order.stages[selected] : null;

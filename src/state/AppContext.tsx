@@ -20,6 +20,7 @@ interface AppContextValue {
   login: (email: string, password: string) => Promise<string | null>;
   logout: () => Promise<void>;
   reload: () => Promise<void>;
+  refreshOrders: () => Promise<void>;
   createCustomer: (
     data: Parameters<typeof api.createCustomer>[0],
   ) => Promise<Customer>;
@@ -120,6 +121,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       },
       reload,
+      async refreshOrders() {
+        setOrders(await api.orders());
+      },
       async createCustomer(data) {
         const item = await api.createCustomer(data);
         setCustomers((items) =>
