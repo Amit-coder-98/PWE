@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:notifications": "node --experimental-strip-types --test tests/notifications.test.mjs",
+    "test:uploads": "node --experimental-strip-types --test tests/image-upload.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

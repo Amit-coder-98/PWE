@@ -8,6 +8,7 @@ from .config import Settings
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 ALLOWED_TYPES = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
+FORMAT_TYPES = {image_format: content_type for content_type, image_format in ALLOWED_TYPES.items()}
 
 
 class R2Storage:
@@ -36,21 +37,43 @@ class R2Storage:
             raise ValueError("Uploaded file size does not match or exceeds 10 MB.")
         if actual_type != expected_type or actual_type not in ALLOWED_TYPES:
             raise ValueError("Uploaded file type does not match the selected image.")
-        body = self.client.get_object(Bucket=self.bucket, Key=key)["Body"].read(MAX_IMAGE_BYTES + 1)
+        stream = self.client.get_object(Bucket=self.bucket, Key=key)["Body"]
+        try:
+            body = stream.read(MAX_IMAGE_BYTES + 1)
+        finally:
+            stream.close()
         if len(body) > MAX_IMAGE_BYTES:
             raise ValueError("Image exceeds 10 MB.")
+        if len(body) != actual_size:
+            raise ValueError("Uploaded image is incomplete. Please upload it again.")
         try:
             with Image.open(BytesIO(body)) as image:
+                detected_type = FORMAT_TYPES.get(image.format)
+                if not detected_type:
+                    raise ValueError("Only JPG, JPEG, PNG, and WebP images are allowed.")
                 image.verify()
             with Image.open(BytesIO(body)) as image:
-                if image.format != ALLOWED_TYPES[expected_type]:
-                    raise ValueError("The file content does not match its image type.")
                 width, height = image.size
                 if width < 1 or height < 1 or width * height > 100_000_000:
                     raise ValueError("Image dimensions are invalid or too large.")
-        except (UnidentifiedImageError, OSError) as exc:
+                image.load()
+        except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
             raise ValueError("The uploaded file is not a valid image.") from exc
-        return {"size": actual_size, "contentType": actual_type, "width": width, "height": height}
+        # Names and browser MIME types can be wrong. Trust decoded image content,
+        # and correct R2 metadata so private view URLs serve the proper type.
+        if detected_type != actual_type:
+            metadata = {name: head[name] for name in (
+                "CacheControl", "ContentDisposition", "ContentEncoding", "ContentLanguage", "Expires",
+            ) if name in head}
+            if "ETag" in head:
+                metadata["CopySourceIfMatch"] = head["ETag"]
+            self.client.copy_object(
+                Bucket=self.bucket, Key=key,
+                CopySource={"Bucket": self.bucket, "Key": key},
+                MetadataDirective="REPLACE", ContentType=detected_type,
+                Metadata=head.get("Metadata", {}), **metadata,
+            )
+        return {"size": actual_size, "contentType": detected_type, "width": width, "height": height}
 
     def delete(self, key: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=key)

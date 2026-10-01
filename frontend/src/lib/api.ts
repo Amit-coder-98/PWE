@@ -6,6 +6,7 @@ import type {
   StageKey,
   User,
 } from "../types";
+import { imageContentType } from "./imageUpload";
 
 const base =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
@@ -213,28 +214,31 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ note, expectedVersion: order.version }),
     }),
-  uploadIntent: (orderId: string, file: File, assetType: "design" | "payment_proof" = "design") =>
-    request<{ asset: DesignAsset; uploadUrl: string }>(
+  uploadIntent: async (orderId: string, file: File, assetType: "design" | "payment_proof" = "design") => {
+    const contentType = await imageContentType(file);
+    return request<{ asset: DesignAsset; uploadUrl: string }>(
       `/api/orders/${orderId}/design-assets/upload-intent`,
       {
         method: "POST",
         body: JSON.stringify({
           fileName: file.name,
-          contentType: file.type,
+          contentType,
           size: file.size,
           assetType,
         }),
       },
-    ),
+    );
+  },
   uploadToR2: async (
     url: string,
     file: File,
     onProgress: (percent: number) => void,
   ) => {
+    const contentType = await imageContentType(file);
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
-      xhr.setRequestHeader("Content-Type", file.type);
+      xhr.setRequestHeader("Content-Type", contentType);
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable)
           onProgress(Math.round((event.loaded / event.total) * 100));

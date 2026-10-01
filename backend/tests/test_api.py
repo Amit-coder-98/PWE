@@ -1,15 +1,19 @@
 from datetime import datetime, timezone
+from io import BytesIO
+from unittest.mock import Mock
 from uuid import uuid4
 
 import mongomock
 import pytest
 from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
+from PIL import Image
 
 from app.config import Settings
 from app.main import create_app
 from app.models import Role, StageKey
 from app.repository import MongoRepository
+from app.storage import R2Storage
 from app.workflow import assert_permission
 
 
@@ -347,6 +351,39 @@ def test_design_upload_and_customer_rejection_requires_reason(system):
     accepted = client.post(f"/api/public/reviews/{token}/decision", json={"decision": "changes_requested", "customerName": "Ravi Patil", "reason": "Make the logo larger."})
     assert accepted.status_code == 200
     assert repository.get_asset(asset_id)["status"] == "changes_requested"
+
+
+@pytest.mark.parametrize("image_format,detected_type", [("JPEG", "image/jpeg"), ("PNG", "image/png"), ("WEBP", "image/webp")])
+@pytest.mark.parametrize("asset_type", ["design", "payment_proof"])
+def test_real_image_upload_complete_and_view(system, monkeypatch, image_format, detected_type, asset_type):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    buffer = BytesIO()
+    Image.new("RGB", (16, 12), "blue").save(buffer, format=image_format)
+    body = buffer.getvalue()
+    r2 = R2Storage(Settings(r2_account_id=None, r2_access_key_id=None, r2_secret_access_key=None, r2_bucket=None))
+    r2.bucket = "test-private"
+    r2.client = Mock()
+    r2.client.head_object.return_value = {"ContentLength": len(body), "ContentType": "image/jpeg"}
+    r2.client.get_object.return_value = {"Body": BytesIO(body)}
+    monkeypatch.setattr(client.app.state.storage, "verify_image", r2.verify_image)
+    intent = client.post(
+        f"/api/orders/{order['id']}/design-assets/upload-intent", headers=headers,
+        json={"fileName": "renamed.jpg", "contentType": "image/jpeg", "size": len(body), "assetType": asset_type},
+    )
+    assert intent.status_code == 200, intent.text
+    asset_id = intent.json()["asset"]["id"]
+    result = client.post(f"/api/design-assets/{asset_id}/complete", headers=headers)
+    assert result.status_code == 200, result.text
+    assert result.json()["status"] == "available"
+    assert repository.get_asset(asset_id)["contentType"] == detected_type
+    assert client.get(f"/api/design-assets/{asset_id}/view-url").status_code == 200
+    assert client.app.state.storage.deleted == []
+    if asset_type == "design":
+        review = client.post(f"/api/orders/{order['id']}/design/review-link", headers=headers, json={"assetId": asset_id})
+        assert review.status_code == 200, review.text
+        assert client.get(f"/api/public/reviews/{review.json()['token']}").status_code == 200
 
 
 def test_private_asset_view_requires_order_and_role_access(system):

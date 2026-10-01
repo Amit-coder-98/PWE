@@ -1838,7 +1838,7 @@ function NewOrderPage() {
         assetType: "design" | "payment_proof",
       ) => {
         if (
-          !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+          file.size <= 0 ||
           file.size > 10 * 1024 * 1024
         ) {
           throw new Error(
@@ -2068,7 +2068,7 @@ function NewOrderPage() {
               <span className="mt-1 block truncate text-sm text-slate-600">{designFile ? designFile.name : "Choose JPG, PNG, or WebP image (maximum 10 MB)"}</span>
             </span>
             <span className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-navy-900">Choose file</span>
-            <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setDesignFile(event.target.files?.[0] ?? null)} />
+            <input className="sr-only" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={(event) => setDesignFile(event.target.files?.[0] ?? null)} />
           </label>
         </section>
         <section className="surface mt-5 p-5 md:p-7">
@@ -2103,7 +2103,7 @@ function NewOrderPage() {
                 <span className="mt-1 block truncate text-sm text-slate-600">{paymentProofFile ? paymentProofFile.name : "Upload payment screenshot or receipt (JPG, PNG, or WebP; maximum 10 MB)"}</span>
               </span>
               <span className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-navy-900">Choose file</span>
-              <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setPaymentProofFile(event.target.files?.[0] ?? null)} />
+              <input className="sr-only" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={(event) => setPaymentProofFile(event.target.files?.[0] ?? null)} />
             </label>
           </div>
         </section>
@@ -2627,7 +2627,7 @@ function DesignWorkspace({
   const upload = async () => {
     if (!file) return;
     if (
-      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      file.size <= 0 ||
       file.size > 10 * 1024 * 1024
     )
       return toast("Choose a JPG, PNG, or WebP image up to 10 MB.", "error");
@@ -2749,7 +2749,7 @@ function DesignWorkspace({
             <input
               className="sr-only"
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
           </label>
@@ -2793,6 +2793,11 @@ function DesignWorkspace({
                     {asset.status.replace("_", " ")}
                   </span>
                 </div>
+                {asset.status === "rejected" && (
+                  <p className="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-800">
+                    Upload failed: {asset.validationError || "The image could not be verified."} Choose the image again to retry.
+                  </p>
+                )}
                 {asset.decisionReason && (
                   <p className="mt-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
                     Customer note: {asset.decisionReason}
@@ -2802,7 +2807,7 @@ function DesignWorkspace({
                   <button
                     className="secondary-button"
                     onClick={() => void view(asset)}
-                    disabled={asset.status === "deleted"}
+                    disabled={["pending", "rejected", "deleted"].includes(asset.status)}
                   >
                     <Eye className="size-4" />
                     View

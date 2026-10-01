@@ -8,6 +8,7 @@
     "build": "npm run build --workspace=frontend",
     "lint": "npm run lint --workspace=frontend",
     "test:notifications": "npm run test:notifications --workspace=frontend",
+    "test:uploads": "npm run test:uploads --workspace=frontend",
     "preview": "npm run preview --workspace=frontend"
   }
 }
