@@ -2,13 +2,20 @@
 
 A mobile-first production order and customer relationship application for non-technical factory teams. It uses real API data only: there are no seeded orders, shared demo credentials, browser business data, or in-memory database fallback.
 
+## Project layout
+
+- `frontend/`: React, Vite, styling, and browser-side tests
+- `backend/`: FastAPI application, Python tests, and server-only configuration
+- `api/`: thin Vercel entry point that imports the backend application
+- `deploy/` and `compose.yaml`: Lightsail deployment configuration
+
 ## Stack
 
 - React, TypeScript, Vite, and Tailwind CSS
 - FastAPI and Pydantic
-- MongoDB Atlas database `prabodhan_bag_test`
+- MongoDB Atlas (separate test and production databases)
 - Private Cloudflare R2 artwork storage
-- Vercel frontend, API, and authenticated daily cleanup job
+- Vercel preview deployment; Lightsail production deployment with Caddy and an authenticated daily cleanup job
 
 ## Implemented operations
 
@@ -55,13 +62,15 @@ python -m venv .venv
 .venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
 ```
 
-Frontend, in a second terminal from the project root:
+Frontend, in a second terminal from the project root (the root npm scripts run the `frontend` workspace):
 
 ```powershell
 npm install
 $env:VITE_API_URL="http://127.0.0.1:8000"
 npm run dev
 ```
+
+Use `frontend/.env.local` for local Vite-only overrides. Never put Atlas or R2 credentials in frontend environment files.
 
 Open `http://localhost:5173`. If Atlas is unavailable, the application intentionally shows a friendly retry screen instead of using mock data.
 
@@ -96,8 +105,13 @@ COOKIE_SECURE=true
 ```
 
 Keep `VITE_API_URL` unset so React uses the same-origin `/api` route. `api/index.py` exposes FastAPI, while `vercel.json` routes API requests before the React fallback and invokes `GET /api/cron/cleanup` daily. Vercel sends `CRON_SECRET` as the cleanup endpoint's Bearer authorization value.
+The Vercel build runs from the repository root and serves `frontend/dist`; keep the Vercel Project Root Directory at the repository root so `api/index.py` remains available.
 
 Deploy a feature branch first. Configure separate Atlas and R2 test resources for Preview, run the practical workflow, and merge to `main` only after approval.
+
+## Lightsail production deployment
+
+See [the deployment runbook](deploy/README.md) for the single-server HTTPS setup, Atlas and R2 configuration, migration gate, verification, cleanup timer, and rollback plan. The new Atlas cluster is empty until the existing data is migrated; do not switch production traffic before that verification.
 
 ## Image-storage rule
 

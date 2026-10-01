@@ -1,36 +1,13 @@
 {
-  "name": "prabodhan-bag-operations",
+  "name": "prabodhan-bag-workspace",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "workspaces": ["frontend"],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "test:notifications": "node --experimental-strip-types --test tests/notifications.test.mjs",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@tanstack/react-query": "latest",
-    "lucide-react": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "react-router-dom": "latest"
-  },
-  "devDependencies": {
-    "@eslint/js": "latest",
-    "@tailwindcss/vite": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@vitejs/plugin-react": "latest",
-    "eslint": "latest",
-    "eslint-plugin-react-hooks": "latest",
-    "eslint-plugin-react-refresh": "latest",
-    "globals": "latest",
-    "tailwindcss": "latest",
-    "typescript": "latest",
-    "typescript-eslint": "latest",
-    "vite": "latest"
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "lint": "npm run lint --workspace=frontend",
+    "test:notifications": "npm run test:notifications --workspace=frontend",
+    "preview": "npm run preview --workspace=frontend"
   }
 }

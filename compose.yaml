@@ -1,0 +1,41 @@
+name: prabodhan-bag
+
+services:
+  api:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      APP_ENV: production
+      COOKIE_SECURE: "true"
+      FRONTEND_ORIGINS: https://${APP_DOMAIN:?Set APP_DOMAIN in the root .env file}
+    restart: unless-stopped
+    networks:
+      - private
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in the root .env file}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - private
+
+networks:
+  private:
+
+volumes:
+  caddy_data:
+  caddy_config:
