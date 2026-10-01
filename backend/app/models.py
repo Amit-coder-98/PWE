@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from .money import Money
+
 
 class Role(str, Enum):
     ADMIN = "admin"
@@ -121,12 +123,12 @@ class OrderCreate(BaseModel):
     customerId: str
     product: str = Field(min_length=2, max_length=200)
     quantity: int = Field(gt=0, le=10_000_000)
-    amount: int = Field(ge=0)
+    amount: Money
     bagType: str | None = Field(default=None, max_length=100)
     bagSize: str | None = Field(default=None, max_length=100)
     printingColor: str | None = Field(default=None, max_length=100)
-    ratePerBag: int | None = Field(default=None, ge=0)
-    advancePaid: int = Field(default=0, ge=0)
+    ratePerBag: Money | None = None
+    advancePaid: Money = 0
     primaryPhone: str | None = Field(default=None, min_length=7, max_length=20)
     alternativePhone: str | None = Field(default=None, min_length=7, max_length=20)
     gstNumber: str | None = Field(default=None, max_length=20)
@@ -139,12 +141,12 @@ class OrderUpdate(BaseModel):
     customerId: str
     product: str = Field(min_length=2, max_length=200)
     quantity: int = Field(gt=0, le=10_000_000)
-    amount: int = Field(ge=0)
+    amount: Money
     bagType: str | None = Field(default=None, max_length=100)
     bagSize: str | None = Field(default=None, max_length=100)
     printingColor: str | None = Field(default=None, max_length=100)
-    ratePerBag: int | None = Field(default=None, ge=0)
-    advancePaid: int = Field(default=0, ge=0)
+    ratePerBag: Money | None = None
+    advancePaid: Money = 0
     primaryPhone: str | None = Field(default=None, min_length=7, max_length=20)
     alternativePhone: str | None = Field(default=None, min_length=7, max_length=20)
     gstNumber: str | None = Field(default=None, max_length=20)
@@ -238,13 +240,13 @@ class OrderDocument(BaseModel):
     gstNumber: str | None = None
     product: str
     quantity: int
-    amount: int
+    amount: Money
     bagType: str | None = None
     bagSize: str | None = None
     printingColor: str | None = None
-    ratePerBag: int | None = None
-    advancePaid: int = 0
-    remainingAmount: int = 0
+    ratePerBag: Money | None = None
+    advancePaid: Money = 0
+    remainingAmount: Money = 0
     orderDate: str
     expectedDelivery: str
     priority: Priority

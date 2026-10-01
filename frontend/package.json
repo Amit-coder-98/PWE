@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test:notifications": "node --experimental-strip-types --test tests/notifications.test.mjs",
     "test:uploads": "node --experimental-strip-types --test tests/image-upload.test.mjs",
+    "test:pricing": "node --experimental-strip-types --test tests/order-pricing.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

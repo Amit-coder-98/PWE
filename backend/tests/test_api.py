@@ -324,6 +324,65 @@ def test_admin_can_edit_active_order_booking_details(system):
     assert saved["version"] == 2
 
 
+@pytest.mark.parametrize("rate,quantity,amount,advance,due", [
+    (7.45, 1200, 8940, 0, 8940),
+    (7.45, 3, 22.35, 10.25, 12.10),
+    (0.29, 3, 0.87, 0.10, 0.77),
+    (490, 500, 245000, 5000, 240000),
+])
+def test_decimal_pricing_create_edit_and_read(system, rate, quantity, amount, advance, due):
+    client, repository = system
+    headers = login(client)
+    existing = create_order(client, headers)
+    payload = {
+        "customerId": existing["customerId"], "product": "Paper bag",
+        "quantity": quantity, "ratePerBag": rate, "amount": amount,
+        "advancePaid": advance, "expectedDelivery": "2026-10-10",
+    }
+    response = client.post("/api/orders", headers=headers, json=payload)
+    assert response.status_code == 200, response.text
+    created = response.json()
+    assert created["ratePerBag"] == rate
+    assert created["amount"] == amount
+    assert created["remainingAmount"] == due
+    assert repository.get_order(created["id"])["remainingAmount"] == due
+    assert client.get(f"/api/orders/{created['id']}").json()["ratePerBag"] == rate
+    edited = client.patch(f"/api/orders/{created['id']}", headers=headers,
+                          json={**payload, "expectedVersion": created["version"], "advancePaid": 0})
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["remainingAmount"] == amount
+    assert edited.json()["ratePerBag"] == rate
+    assert edited.json()["version"] == created["version"] + 1
+
+
+@pytest.mark.parametrize("field,value", [("ratePerBag", -7.45), ("ratePerBag", 7.451), ("amount", -1), ("advancePaid", -0.1), ("quantity", 1.5)])
+def test_invalid_order_numbers_return_specific_field_without_creating_order(system, field, value):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    payload = {"customerId": order["customerId"], "product": "Paper bag", "quantity": 1200,
+               "ratePerBag": 7.45, "amount": 8940, "advancePaid": 0, "expectedDelivery": "2026-10-10"}
+    payload[field] = value
+    response = client.post("/api/orders", headers=headers, json=payload)
+    assert response.status_code == 422, response.text
+    assert response.json()["fields"][0]["field"] == field
+    assert len(repository.list_orders()) == 1
+
+
+def test_decimal_advance_cannot_exceed_total(system):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    response = client.post("/api/orders", headers=headers, json={
+        "customerId": order["customerId"], "product": "Paper bag", "quantity": 3,
+        "ratePerBag": 7.45, "amount": 22.35, "advancePaid": 22.36,
+        "expectedDelivery": "2026-10-10",
+    })
+    assert response.status_code == 422, response.text
+    assert "Advance payment" in response.json()["message"]
+    assert len(repository.list_orders()) == 1
+
+
 def test_no_image_completes_design_but_plate_remains(system):
     client, _ = system
     headers = login(client)

@@ -6,6 +6,7 @@ from pymongo import ASCENDING, DESCENDING, MongoClient, ReturnDocument
 from pymongo.database import Database
 
 from .config import Settings
+from .money import remaining_money
 from .workflow import initial_stages
 
 
@@ -62,7 +63,7 @@ class MongoRepository:
             },
             "orders": {
                 "id": "string", "orderNumber": "string", "customerId": "string", "quantity": "int",
-                "amount": "int", "stages": "object", "version": "int", "status": "string",
+                "amount": ["int", "long", "double"], "stages": "object", "version": "int", "status": "string",
                 "createdAt": "date", "updatedAt": "date",
             },
             "design_assets": {
@@ -198,7 +199,7 @@ class MongoRepository:
             "product": payload["product"], "quantity": payload["quantity"], "amount": payload["amount"],
             "bagType": payload.get("bagType"), "bagSize": payload.get("bagSize"),
             "printingColor": payload.get("printingColor"), "ratePerBag": payload.get("ratePerBag"),
-            "advancePaid": advance_paid, "remainingAmount": payload["amount"] - advance_paid,
+            "advancePaid": advance_paid, "remainingAmount": remaining_money(payload["amount"], advance_paid),
             "orderDate": timestamp.date().isoformat(), "expectedDelivery": payload["expectedDelivery"],
             "priority": payload.get("priority", "normal"), "notes": payload.get("notes"),
             "currentStage": "material", "stages": initial_stages(), "version": 1, "status": "active",

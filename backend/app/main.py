@@ -21,6 +21,7 @@ from .models import (
     StageStatus, StageUpdateRequest, SubmitReviewRequest, UploadIntentRequest, UserCreate, UserPublic, UserUpdate,
 )
 from .repository import MongoRepository, now
+from .money import remaining_money
 from .storage import R2Storage
 from .workflow import LEGACY_ROLE_ALIASES, STAGE_ROLES, apply_action, assert_permission, refresh_ready_states
 
@@ -367,7 +368,7 @@ def create_app(settings_override: Settings | None = None, repository_override: M
             "gstNumber": data.get("gstNumber") or customer.get("gstNumber"), "product": data["product"], "quantity": data["quantity"],
             "amount": data["amount"], "bagType": data.get("bagType"), "bagSize": data.get("bagSize"),
             "printingColor": data.get("printingColor"), "ratePerBag": data.get("ratePerBag"), "advancePaid": data["advancePaid"],
-            "remainingAmount": data["amount"] - data["advancePaid"], "expectedDelivery": data["expectedDelivery"],
+            "remainingAmount": remaining_money(data["amount"], data["advancePaid"]), "expectedDelivery": data["expectedDelivery"],
             "priority": payload.priority.value, "notes": data.get("notes"),
         })
         saved = repository.replace_order(order_document, payload.expectedVersion)

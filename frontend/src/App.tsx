@@ -51,6 +51,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { StatusBadge } from "./components/StatusBadge";
 import { ToastHost } from "./components/ToastHost";
 import { api, ApiError } from "./lib/api";
+import { formatMoney as money, orderTotal, remainingAmount } from "./lib/money";
 import {
   canManageStage,
   nextInstruction,
@@ -148,12 +149,6 @@ const roleResponsibilities: Record<Role, string> = {
 };
 const canViewPrices = (role?: Role) =>
   !!role && ["admin", "accountant"].includes(role);
-const money = (amount: number) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(amount);
 const activeOrderStages = (order: Order) =>
   productionStages.filter((stage) =>
     ["ready", "in_progress", "blocked", "issue"].includes(
@@ -1765,9 +1760,9 @@ function NewOrderPage() {
   const [advanceValue, setAdvanceValue] = useState("");
   const [designFile, setDesignFile] = useState<File | null>(null);
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
-  const totalValue = Number(quantityValue || 0) * Number(rateValue || 0);
+  const totalValue = orderTotal(Number(rateValue || 0), Number(quantityValue || 0));
   const advanceAmount = advancePaid === "yes" ? Number(advanceValue || 0) : 0;
-  const remainingValue = Math.max(0, totalValue - advanceAmount);
+  const remainingValue = remainingAmount(totalValue, advanceAmount);
   const matchingCustomers = customers
     .filter((customer) => {
       const query = customerQuery.trim().toLocaleLowerCase();
@@ -2226,7 +2221,7 @@ function OrderDetailPage() {
   const openOrderEdit = () => {
     setEditError("");
     setEditQuantity(String(order.quantity));
-    setEditRate(String(order.ratePerBag ?? Math.round(order.amount / order.quantity)));
+    setEditRate(String(order.ratePerBag ?? Math.round((order.amount / order.quantity) * 100) / 100));
     setEditAdvance(String(order.advancePaid ?? 0));
     setEditOpen(true);
   };
@@ -2235,7 +2230,7 @@ function OrderDetailPage() {
     const form = new FormData(event.currentTarget);
     const updatedQuantity = Number(editQuantity);
     const updatedRate = Number(editRate);
-    const updatedAmount = updatedQuantity * updatedRate;
+    const updatedAmount = orderTotal(updatedRate, updatedQuantity);
     const updatedAdvance = Number(editAdvance || 0);
     if (!updatedQuantity || updatedQuantity < 1 || updatedRate < 0) {
       setEditError("Enter a valid rate and number of bags.");
@@ -2275,8 +2270,8 @@ function OrderDetailPage() {
       setEditBusy(false);
     }
   };
-  const editTotal = Number(editQuantity || 0) * Number(editRate || 0);
-  const editDue = Math.max(0, editTotal - Number(editAdvance || 0));
+  const editTotal = orderTotal(Number(editRate || 0), Number(editQuantity || 0));
+  const editDue = remainingAmount(editTotal, Number(editAdvance || 0));
   const performTaskAction = async (
     action: "complete" | "block" | "resolve" | "material_available",
     taskData: Record<string, unknown> = {},

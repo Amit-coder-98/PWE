@@ -7,6 +7,7 @@ import type {
   User,
 } from "../types";
 import { imageContentType } from "./imageUpload";
+import { apiErrorMessage } from "./validationErrors";
 
 const base =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
@@ -33,9 +34,7 @@ export class ApiError extends Error {
       fields?: Array<{ field: string; message: string }>;
     },
   ) {
-    super(
-      body.message ?? "The request could not be completed. Please try again.",
-    );
+    super(apiErrorMessage(body));
     this.status = status;
     this.fields = body.fields ?? [];
   }
