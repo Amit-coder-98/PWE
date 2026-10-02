@@ -37,7 +37,10 @@ LEGACY_ROLE_ALIASES = {
 
 SEQUENCE = [StageKey.MATERIAL, StageKey.DESIGN, StageKey.CUTTING, StageKey.PLATE, StageKey.PRINTING,
             StageKey.STITCHING, StageKey.PACKING, StageKey.DC, StageKey.BILLING, StageKey.PAYMENT,
-            StageKey.DISPATCH, StageKey.DELIVERY, StageKey.RETURN, StageKey.REFUND]
+            StageKey.DISPATCH, StageKey.DELIVERY]
+
+# Return/refund are exceptional after-sales events, not automatic production
+# tasks. A delivered order must not create a return responsibility.
 
 
 def initial_stages() -> dict[str, dict]:

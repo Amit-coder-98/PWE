@@ -11,6 +11,7 @@
     "test:uploads": "node --experimental-strip-types --test tests/image-upload.test.mjs",
     "test:pricing": "node --experimental-strip-types --test tests/order-pricing.test.mjs",
     "test:artwork": "node --experimental-strip-types --test tests/artwork.test.mjs",
+    "test:workflow": "node --experimental-strip-types --test tests/workflow-focus.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

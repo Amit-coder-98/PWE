@@ -52,12 +52,18 @@ import { ToastHost } from "./components/ToastHost";
 import { api, ApiError } from "./lib/api";
 import { formatMoney as money, orderTotal, remainingAmount } from "./lib/money";
 import { artworkAccess } from "./lib/artwork";
+import { formatDate as date, formatDateTime as dateTime } from "./lib/dateTime";
 import {
+  activeStages,
+  actionableStage,
   canManageStage,
+  currentWorkStage,
+  focusedStage,
   nextInstruction,
   operatingRole,
   orderNotifications,
   productionStages,
+  requestedTask,
   stageInfo,
 } from "./lib/workflow";
 import { toast, useApp } from "./state/AppContext";
@@ -148,35 +154,13 @@ const roleResponsibilities: Record<Role, string> = {
 };
 const canViewPrices = (role?: Role) =>
   !!role && ["admin", "accountant"].includes(role);
-const activeOrderStages = (order: Order) =>
-  productionStages.filter((stage) =>
-    ["ready", "in_progress", "blocked", "issue"].includes(
-      order.stages[stage].status,
-    ),
-  );
+const activeOrderStages = activeStages;
 const taskStagesForRole = (role: Role) => {
   const operating = operatingRole(role);
   return productionStages.filter(
     (stage) => stageInfo[stage].role === operating,
   );
 };
-const date = (value?: string) =>
-  value
-    ? new Intl.DateTimeFormat("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }).format(new Date(value))
-    : "Not recorded";
-const dateTime = (value?: string) =>
-  value
-    ? new Intl.DateTimeFormat("en-IN", {
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
-      }).format(new Date(value))
-    : "Not recorded";
 
 function LoadingScreen() {
   return (
@@ -1179,7 +1163,7 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
           </div>
           <div className="mt-3 border-t border-slate-100 pt-3">
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Order status</p>
-            <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label="Filter orders by status">
+            <div className="inline-flex max-w-full flex-wrap gap-1 rounded-xl bg-slate-100 p-1" aria-label="Filter orders by status">
             {([
               ["all", "All orders"],
               ["active", "In queue"],
@@ -1252,7 +1236,9 @@ function OrderListRow({ order, visibleStages }: { order: Order; visibleStages?: 
   const liveStages = activeOrderStages(order);
   const displayedStages = visibleStages ? liveStages.filter((stage) => visibleStages.includes(stage)) : liveStages;
   const preferredStage = displayedStages[0];
-  const activeLabel = displayedStages.length === 1
+  const activeLabel = order.status === "completed" ? "Delivered / Completed"
+    : order.status === "cancelled" ? "Cancelled"
+    : displayedStages.length === 1
     ? order.stages[displayedStages[0]].status === "blocked" || order.stages[displayedStages[0]].status === "issue"
       ? `${stageInfo[displayedStages[0]].short} needs attention`
       : `${stageInfo[displayedStages[0]].short} pending`
@@ -1343,7 +1329,7 @@ function OrderListRow({ order, visibleStages }: { order: Order; visibleStages?: 
               </div>
             </>
           ) : (
-            <p className="text-sm text-slate-500">No work is waiting</p>
+            <p className="text-sm text-slate-500">{activeLabel}</p>
           )}
         </div>
         <div>
@@ -1358,7 +1344,8 @@ function OrderListRow({ order, visibleStages }: { order: Order; visibleStages?: 
 }
 function OrderCard({ order }: { order: Order }) {
   const { currentUser } = useApp();
-  const state = order.stages[order.currentStage];
+  const stage = currentWorkStage(order);
+  const state = order.stages[stage];
   return (
     <Link
       to={`/orders/${order.id}`}
@@ -1377,9 +1364,9 @@ function OrderCard({ order }: { order: Order }) {
         <ChevronRight className="size-5 shrink-0 text-slate-400" />
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <StatusBadge status={state.status} />
+        {order.status === "cancelled" ? <span className="text-sm font-bold text-red-700">Cancelled</span> : <StatusBadge status={order.status === "completed" ? "completed" : state.status} />}
         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold">
-          {stageInfo[order.currentStage].short}
+          {order.status === "completed" ? "Delivered" : stageInfo[stage].short}
         </span>
         {order.priority !== "normal" && (
           <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-bold text-orange-700">
@@ -1532,19 +1519,19 @@ function CustomersPage() {
       </div>
       {customerView === "list" ? (
         <section className="surface overflow-hidden">
-          <div className={`hidden border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 ${permitted ? "md:grid md:grid-cols-[minmax(220px,1.5fr)_minmax(170px,1fr)_150px_135px_130px] md:gap-4" : "md:grid md:grid-cols-[minmax(240px,1.6fr)_minmax(180px,1fr)_160px_145px] md:gap-4"}`}>
+          <div className={`hidden border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 ${permitted ? "xl:grid xl:grid-cols-[minmax(220px,1.5fr)_minmax(170px,1fr)_150px_135px_130px] xl:gap-4" : "xl:grid xl:grid-cols-[minmax(240px,1.6fr)_minmax(180px,1fr)_160px_145px] xl:gap-4"}`}>
             <span>Customer</span><span>Contact person</span><span>Phone</span><span>Status</span>{permitted && <span>Action</span>}
           </div>
           {filtered.map((customer) => (
-            <article key={customer.id} className={`border-b border-slate-100 p-4 last:border-b-0 ${permitted ? "md:grid md:grid-cols-[minmax(220px,1.5fr)_minmax(170px,1fr)_150px_135px_130px] md:items-center md:gap-4 md:px-5" : "md:grid md:grid-cols-[minmax(240px,1.6fr)_minmax(180px,1fr)_160px_145px] md:items-center md:gap-4 md:px-5"}`}>
+            <article key={customer.id} className={`border-b border-slate-100 p-4 last:border-b-0 ${permitted ? "xl:grid xl:grid-cols-[minmax(220px,1.5fr)_minmax(170px,1fr)_150px_135px_130px] xl:items-center xl:gap-4 xl:px-5" : "xl:grid xl:grid-cols-[minmax(240px,1.6fr)_minmax(180px,1fr)_160px_145px] xl:items-center xl:gap-4 xl:px-5"}`}>
               <div className="flex min-w-0 items-center gap-3">
                 <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-sky-50 text-sm font-bold text-sky-700">{customer.companyName.slice(0, 2).toUpperCase()}</span>
-                <div className="min-w-0"><h2 className="truncate font-bold text-navy-900">{permitted ? <Link className="hover:text-brand hover:underline" to={`/customers/${customer.id}`}>{customer.companyName}</Link> : customer.companyName}</h2><p className="mt-0.5 truncate text-sm text-slate-500 md:hidden">{customer.contactPerson} · {customer.phone}</p></div>
+                <div className="min-w-0"><h2 className="truncate font-bold text-navy-900">{permitted ? <Link className="block max-w-full truncate hover:text-brand hover:underline" to={`/customers/${customer.id}`}>{customer.companyName}</Link> : customer.companyName}</h2><p className="mt-0.5 truncate text-sm text-slate-500 xl:hidden">{customer.contactPerson} · {customer.phone}</p></div>
               </div>
-              <p className="mt-3 text-sm text-slate-700 md:mt-0">{customer.contactPerson}</p>
-              <p className="mt-1 text-sm text-slate-700 md:mt-0">{customer.phone}</p>
-              <span className={`mt-3 inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-bold md:mt-0 ${customer.active ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{customer.active ? "Active" : "Inactive"}</span>
-              {permitted && <div className="mt-3 flex gap-2 md:mt-0"><Link className="secondary-button flex-1 !min-h-10 !rounded-lg !px-3 !py-2 text-center text-sm" to={`/customers/${customer.id}`}>Profile</Link><button className="secondary-button flex-1 !min-h-10 !rounded-lg !px-3 !py-2 text-sm" onClick={() => { setEditing(customer); setOpen(true); }}>Edit</button></div>}
+              <p className="mt-3 text-sm text-slate-700 xl:mt-0">{customer.contactPerson}</p>
+              <p className="mt-1 text-sm text-slate-700 xl:mt-0">{customer.phone}</p>
+              <span className={`mt-3 inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-bold xl:mt-0 ${customer.active ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{customer.active ? "Active" : "Inactive"}</span>
+              {permitted && <div className="mt-3 flex gap-2 xl:mt-0"><Link className="secondary-button flex-1 !min-h-10 !rounded-lg !px-3 !py-2 text-center text-sm" to={`/customers/${customer.id}`}>Profile</Link><button className="secondary-button flex-1 !min-h-10 !rounded-lg !px-3 !py-2 text-sm" onClick={() => { setEditing(customer); setOpen(true); }}>Edit</button></div>}
             </article>
           ))}
           {filtered.length === 0 && <Empty title="No customers yet" text="Add the first real customer before creating an order." />}
@@ -1557,7 +1544,7 @@ function CustomersPage() {
                 <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sky-50 font-bold text-sky-700">
                   {customer.companyName.slice(0, 2).toUpperCase()}
                 </span>
-                <div className="min-w-0"><h2 className="truncate font-bold text-navy-900">{permitted ? <Link className="hover:text-brand hover:underline" to={`/customers/${customer.id}`}>{customer.companyName}</Link> : customer.companyName}</h2><p className="text-sm text-slate-500">{customer.contactPerson}</p></div>
+                <div className="min-w-0"><h2 className="truncate font-bold text-navy-900">{permitted ? <Link className="block max-w-full truncate hover:text-brand hover:underline" to={`/customers/${customer.id}`}>{customer.companyName}</Link> : customer.companyName}</h2><p className="text-sm text-slate-500">{customer.contactPerson}</p></div>
               </div>
               <div className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${customer.active ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{customer.active ? "Active customer" : "Inactive customer"}</div>
               <dl className="mt-4 space-y-2 text-sm"><p><b className="text-slate-500">Phone:</b> {customer.phone}</p><p className="truncate"><b className="text-slate-500">Email:</b> {customer.email || "Not provided"}</p><p className="line-clamp-2"><b className="text-slate-500">Address:</b> {customer.address}</p></dl>
@@ -1657,7 +1644,7 @@ function downloadCustomerOrderSheet(customer: Customer, orders: Order[]) {
       order.advancePaid ?? 0,
       order.remainingAmount ?? Math.max(0, order.amount - (order.advancePaid ?? 0)),
       order.status,
-      stageInfo[order.currentStage].label,
+      order.status === "completed" ? "Delivered / Completed" : order.status === "cancelled" ? "Cancelled" : stageInfo[currentWorkStage(order)].label,
       order.notes ?? "",
     ]),
   ];
@@ -1729,12 +1716,12 @@ function CustomerProfilePage() {
         </div>
         {visibleOrders.length ? <div className="divide-y divide-slate-100">
           {visibleOrders.map((order) => (
-            <Link key={order.id} to={`/orders/${order.id}`} className="block p-4 transition hover:bg-sky-50 sm:grid sm:grid-cols-[140px_minmax(220px,1fr)_150px_130px_28px] sm:items-center sm:gap-4 sm:px-5">
+            <Link key={order.id} to={`/orders/${order.id}`} className="block p-4 transition hover:bg-sky-50 xl:grid xl:grid-cols-[140px_minmax(220px,1fr)_150px_130px_28px] xl:items-center xl:gap-4 xl:px-5">
               <p className="font-extrabold text-brand">{order.orderNumber}</p>
-              <div className="mt-2 sm:mt-0"><p className="font-bold text-navy-900">{order.bagType ?? order.product}</p><p className="mt-0.5 text-sm text-slate-600">{order.quantity.toLocaleString("en-IN")} bags · {money(order.amount)}</p></div>
-              <span className={`mt-2 inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-bold capitalize sm:mt-0 ${order.status === "completed" ? "bg-emerald-50 text-emerald-800" : order.status === "cancelled" ? "bg-slate-100 text-slate-700" : "bg-sky-50 text-sky-800"}`}>{order.status}</span>
-              <p className="mt-2 text-sm font-semibold text-slate-700 sm:mt-0">{date(order.expectedDelivery)}</p>
-              <ChevronRight className="hidden size-5 text-slate-400 sm:block" />
+              <div className="mt-2 xl:mt-0"><p className="font-bold text-navy-900">{order.bagType ?? order.product}</p><p className="mt-0.5 text-sm text-slate-600">{order.quantity.toLocaleString("en-IN")} bags · {money(order.amount)}</p></div>
+              <span className={`mt-2 inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-bold capitalize xl:mt-0 ${order.status === "completed" ? "bg-emerald-50 text-emerald-800" : order.status === "cancelled" ? "bg-slate-100 text-slate-700" : "bg-sky-50 text-sky-800"}`}>{order.status}</span>
+              <p className="mt-2 text-sm font-semibold text-slate-700 xl:mt-0">{date(order.expectedDelivery)}</p>
+              <ChevronRight className="hidden size-5 text-slate-400 xl:block" />
             </Link>
           ))}
         </div> : <Empty title="No matching orders" text="This customer has no orders in this status yet." />}
@@ -2176,11 +2163,9 @@ function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(
     orders.find((item) => item.id === id) ?? null,
   );
-  const [selected, setSelected] = useState<StageKey | null>(() => {
-    const stage = searchParams.get("stage");
-    return stage && stage in stageInfo ? (stage as StageKey) : null;
-  });
+  const [selected, setSelected] = useState<StageKey | null>(null);
   const requestedStage = searchParams.get("stage");
+  const currentUserRole = currentUser?.role;
   const [cancelPending, setCancelPending] = useState(false);
   const [materialAvailableConfirm, setMaterialAvailableConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -2192,26 +2177,35 @@ function OrderDetailPage() {
   const [editRate, setEditRate] = useState("");
   const [editAdvance, setEditAdvance] = useState("");
   useEffect(() => {
-    // Keep deep links in sync even when the user is already viewing this order.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSelected(requestedStage && requestedStage in stageInfo ? (requestedStage as StageKey) : null);
-  }, [requestedStage, routeKey]);
-  useEffect(() => {
-    if (!id) return;
+    if (!id || !currentUserRole) return;
+    let disposed = false;
     // Loading fresh server state when the route changes is intentional.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBusy(true);
     api
       .order(id)
-      .then(setOrder)
-      .catch((error) => toast(error.message, "error"))
-      .finally(() => setBusy(false));
-  }, [id, routeKey]);
-  if (busy && !order) return <LoadingScreen />;
+      .then((freshOrder) => {
+        if (disposed) return;
+        setOrder(freshOrder);
+        setSelected(requestedTask(freshOrder, currentUserRole, requestedStage));
+      })
+      .catch((error) => {
+        if (disposed) return;
+        setOrder(null);
+        setSelected(null);
+        toast(error.message, "error");
+      })
+      .finally(() => { if (!disposed) setBusy(false); });
+    return () => { disposed = true; };
+  }, [id, routeKey, requestedStage, currentUserRole]);
+  if (busy) return <LoadingScreen />;
   if (!order || !currentUser) return <Navigate to="/orders" replace />;
   const state = selected ? order.stages[selected] : null;
   const manage = selected ? canManageStage(currentUser.role, selected) : false;
-  const currentRole = operatingRole(stageInfo[order.currentStage].role);
+  const focus = focusedStage(order, currentUser.role);
+  const myTask = actionableStage(order, currentUser.role);
+  const closed = order.status !== "active";
+  const currentRole = operatingRole(stageInfo[focus].role);
   const currentVisual = roleVisuals[currentRole];
   const CurrentRoleIcon = currentVisual.icon;
   const canEditOrder = ["admin", "marketing"].includes(currentUser.role);
@@ -2333,10 +2327,10 @@ function OrderDetailPage() {
         <ArrowLeft className="size-5" />
         Back to orders
       </button>
-      <section className="surface overflow-hidden">
+      <section className="surface order-detail overflow-hidden">
         <div className="bg-navy-900 p-5 text-white md:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
+          <div className="flex flex-col items-start justify-between gap-4 xl:flex-row">
+            <div className="min-w-0 w-full break-words xl:flex-1">
               <p className="font-bold text-orange-300">{order.orderNumber}</p>
               <h1 className="mt-1 text-2xl font-extrabold md:text-3xl">
                 {order.customer}
@@ -2345,21 +2339,22 @@ function OrderDetailPage() {
                 {order.product} · {order.quantity.toLocaleString("en-IN")} bags
               </p>
             </div>
-            <div className="flex flex-wrap items-start justify-end gap-3">
+            <div className="flex w-full max-w-full flex-wrap items-start gap-3 xl:w-auto xl:justify-end">
               {canEditOrder && order.status === "active" && (
                 <button className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2 font-semibold text-navy-900 shadow-sm transition hover:bg-slate-100" onClick={openOrderEdit}>
                   Edit order details
                 </button>
               )}
-            <div className="flex min-w-52 items-start gap-3 rounded-xl bg-white/10 p-3">
+            <div className="flex min-w-0 max-w-full items-start gap-3 rounded-xl bg-white/10 p-3 sm:min-w-52">
               <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${currentVisual.soft} ${currentVisual.color}`}>
                 <CurrentRoleIcon className="size-5" aria-hidden="true" />
               </span>
-              <div>
-                <p className="text-xs text-slate-300">Current responsibility</p>
-                <p className="font-bold">{stageInfo[order.currentStage].label}</p>
-                <p className="mt-0.5 text-xs text-slate-300">{roleLabels[currentRole]}</p>
-                <div className="mt-2"><StatusBadge status={order.stages[order.currentStage].status} /></div>
+              <div className="min-w-0 break-words">
+                <p className="text-xs text-slate-300">{closed ? "Order status" : myTask ? "Your current task" : "Current responsibility"}</p>
+                <p className="font-bold">{order.status === "completed" ? "Delivered / Completed" : order.status === "cancelled" ? "Cancelled" : stageInfo[focus].label}</p>
+                {!closed && <p className="mt-0.5 text-xs text-slate-300">{roleLabels[currentRole]}</p>}
+                {order.status === "completed" && order.closedAt && <p className="mt-1 text-xs text-slate-300">{dateTime(order.closedAt)}</p>}
+                {order.status !== "cancelled" && <div className="mt-2"><StatusBadge status={order.status === "completed" ? "completed" : order.stages[focus].status} /></div>}
               </div>
             </div>
             </div>
@@ -2383,19 +2378,19 @@ function OrderDetailPage() {
             <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${currentVisual.soft} ${currentVisual.color}`}>
               <CurrentRoleIcon className="size-5" aria-hidden="true" />
             </span>
-            <h2 className="pt-1.5 text-lg font-bold text-navy-900">{nextInstruction(order)}</h2>
+            <h2 className="min-w-0 break-words pt-1.5 text-lg font-bold text-navy-900">{nextInstruction(order, currentUser.role)}</h2>
           </div>
-        <button
+        {!closed && (myTask || canEditOrder) && <button
           className="primary-button mt-4"
           onClick={() => {
-            setSelected(order.currentStage);
+            setSelected(focus);
           }}
         >
-          {canManageStage(currentUser.role, order.currentStage)
+          {canManageStage(currentUser.role, focus)
             ? "Open next action"
-            : `View ${roleLabels[stageInfo[order.currentStage].role]} step`}
+            : `View ${roleLabels[stageInfo[focus].role]} step`}
           <ChevronRight className="size-4" />
-        </button>
+        </button>}
       </section>
       {currentUser.role === "admin" && ["blocked", "issue"].includes(order.stages.material.status) && (
         <section className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
@@ -2419,13 +2414,14 @@ function OrderDetailPage() {
         </div>
         <div className="surface p-5">
           <h2 className="flex items-center gap-2 font-bold text-navy-900"><ClipboardList className="size-5 text-sky-700" aria-hidden="true" />Activity history</h2>
-          <p className="text-sm text-slate-500">Who changed what and when.</p>
+          <p className="text-sm text-slate-500">Who changed what and when. All times are Indian Standard Time (IST).</p>
           <ol className="mt-4 space-y-4">
             {order.activity?.map((item) => (
-              <li className="border-l-2 border-slate-200 pl-4" key={item.id}>
+              <li className="min-w-0 break-words border-l-2 border-slate-200 pl-4" key={item.id}>
                 <p className="text-sm font-semibold">{item.message}</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {item.actorName} · {dateTime(item.at)}
+                  {item.actorName || "Unknown user"}{item.actorRole && ` (${roleLabels[item.actorRole as Role] ?? item.actorRole.replaceAll("_", " ")})`}
+                  <time className="mt-1 block" dateTime={item.at}>{dateTime(item.at)}</time>
                 </p>
               </li>
             ))}
@@ -2519,7 +2515,7 @@ function OrderDetailPage() {
           <aside className="h-full w-full max-w-lg overflow-y-auto bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between">
               <div>
-                <p className="eyebrow">Your task</p>
+                <p className="eyebrow">{manage ? "Your task" : "Department progress"}</p>
                 <h2 className="mt-1 text-2xl font-bold text-navy-900">
                   {stageInfo[selected].label}
                 </h2>
@@ -3185,7 +3181,7 @@ function ErrorText({ children }: { children: ReactNode }) {
 }
 function Summary({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0 break-words">
       <p className="text-xs text-slate-400">{label}</p>
       <p className="mt-1 text-sm font-bold">{value}</p>
     </div>
@@ -3194,8 +3190,8 @@ function Summary({ label, value }: { label: string; value: string }) {
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4 border-b border-slate-100 py-3 text-sm">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="text-right font-semibold">{value}</dd>
+      <dt className="shrink-0 text-slate-500">{label}</dt>
+      <dd className="min-w-0 break-words text-right font-semibold">{value}</dd>
     </div>
   );
 }

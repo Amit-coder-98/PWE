@@ -7,6 +7,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ts from 'typescript'
 import { artworkAccess, canViewArtwork } from '../src/lib/artwork.ts'
+import { formatDateTime } from '../src/lib/dateTime.ts'
 
 // Render the actual TSX component without a browser or a live database.
 // API calls and global notifications are stubbed; no requests leave this test.
@@ -19,6 +20,7 @@ const componentModule = new Module(componentPath)
 componentModule.require = (specifier) => {
   if (specifier === '../lib/api') return { api: {} }
   if (specifier === '../lib/artwork') return { artworkAccess, canViewArtwork }
+  if (specifier === '../lib/dateTime') return { formatDateTime }
   if (specifier === '../state/AppContext') return { toast() {} }
   if (specifier === './ConfirmDialog') return { ConfirmDialog: () => null }
   return localRequire(specifier)

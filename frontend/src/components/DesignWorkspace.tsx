@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Eye, ImagePlus, Upload, X } from "lucide-react";
 import { api } from "../lib/api";
 import { artworkAccess, canViewArtwork } from "../lib/artwork";
+import { formatDateTime } from "../lib/dateTime";
 import { toast } from "../state/AppContext";
 import type { DesignAsset, Order, Role } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -116,7 +117,7 @@ export function DesignWorkspace({ order, setOrder, reload, role }: {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="break-all font-bold">Version {asset.version} · {asset.fileName}</p>
-                    <p className="text-xs text-slate-500">{asset.uploadedByName} · {new Date(asset.createdAt).toLocaleString("en-IN")}</p>
+                    <p className="break-words text-xs text-slate-500">{asset.uploadedByName} · {formatDateTime(asset.createdAt)}</p>
                   </div>
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold">
                     {asset.status === "approved" ? "Customer-approved artwork" : asset.status === "available" ? "Uploaded" : asset.status.replaceAll("_", " ")}

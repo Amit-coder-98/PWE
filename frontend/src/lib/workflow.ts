@@ -64,9 +64,42 @@ export function statusLabel(status: StageStatus) {
   } satisfies Record<StageStatus, string>)[status]
 }
 
-export function nextInstruction(order: Order) {
-  const stage = order.currentStage
+export function activeStages(order: Order) {
+  if (order.status !== 'active') return []
+  return productionStages.filter((stage) => ['ready', 'in_progress', 'blocked', 'issue'].includes(order.stages[stage].status))
+}
+
+export function actionableStage(order: Order, role: Role): StageKey | null {
+  return activeStages(order).find((stage) => canManageStage(role, stage)) ?? null
+}
+
+export function currentWorkStage(order: Order): StageKey {
+  if (order.status === 'completed') return 'delivery'
+  const active = activeStages(order)
+  return active.includes(order.currentStage) ? order.currentStage : active[0] ?? 'delivery'
+}
+
+export function focusedStage(order: Order, role: Role): StageKey {
+  return actionableStage(order, role) ?? currentWorkStage(order)
+}
+
+export function requestedTask(order: Order, role: Role, requested: string | null): StageKey | null {
+  if (!requested || order.status !== 'active') return null
+  const active = activeStages(order)
+  const stage = active.find((key) => key === requested)
+  const supervisor = role === 'admin' || role === 'marketing'
+  if (stage && (canManageStage(role, stage) || supervisor)) return stage
+  // Old bookmarks/notifications may name a completed task. Only open the
+  // worker's next assigned task, never the previous department's drawer.
+  return actionableStage(order, role)
+}
+
+export function nextInstruction(order: Order, role?: Role) {
+  if (order.status === 'completed') return 'Delivered — this order is completed. No production task is pending.'
+  if (order.status === 'cancelled') return 'This order is cancelled. No further production action is required.'
+  const stage = role ? focusedStage(order, role) : currentWorkStage(order)
   const state = order.stages[stage]
+  if (role && !actionableStage(order, role) && !['admin', 'marketing'].includes(role)) return 'No task is currently assigned to you. The next team is handling this order.'
   if (state.status === 'blocked' || state.status === 'issue') return `${stageInfo[stage].short} needs attention before production can continue.`
   return `${stageInfo[stage].short} is pending with the responsible team.`
 }

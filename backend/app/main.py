@@ -176,6 +176,10 @@ def create_app(settings_override: Settings | None = None, repository_override: M
 
     def visible_order(document: dict, actor: dict) -> dict:
         result = deepcopy(document)
+        # Correct the presentation of previously delivered records without
+        # rewriting their history or modifying the database on a read.
+        if result.get("status") == "completed":
+            result["currentStage"] = StageKey.DELIVERY.value
         role = effective_role(actor)
         if role not in {Role.ADMIN, Role.ACCOUNTANT}:
             result["amount"] = 0
@@ -423,6 +427,7 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         message = apply_action(order_document, stage_key, payload.action, payload.note, payload.data)
         if stage_key == StageKey.DELIVERY and payload.action.value == "complete":
             order_document["status"] = "completed"
+            order_document["currentStage"] = StageKey.DELIVERY.value
             order_document["closedAt"] = now()
             repository.schedule_order_assets(order_id, now() + timedelta(days=30))
         saved = repository.replace_order(order_document, payload.expectedVersion)

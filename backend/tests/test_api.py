@@ -245,10 +245,14 @@ def test_complete_role_by_role_production_workflow(system):
 
     headers = sign_in("printing_operator", headers)
     order = complete("printing", order, headers, {"qualityChecked": True})
+    assert order["currentStage"] == "stitching"
+    assert order["stages"]["stitching"]["status"] == "ready"
 
     headers = sign_in("manager", headers)
     order = complete("stitching", order, headers)
+    assert order["currentStage"] == "packing"
     order = complete("packing", order, headers)
+    assert order["currentStage"] == "dc"
     order = complete("dc", order, headers)
 
     headers = sign_in("accountant", headers)
@@ -259,11 +263,29 @@ def test_complete_role_by_role_production_workflow(system):
 
     headers = sign_in("transport_manager", headers)
     order = complete("dispatch", order, headers, {"vehicleNumber": "MH13AB1234"})
+    assert order["currentStage"] == "delivery"
 
     headers = sign_in("marketing", headers)
     order = complete("delivery", order, headers, {"receivedBy": "Ravi Patil"})
     assert order["status"] == "completed"
     assert order["stages"]["delivery"]["status"] == "completed"
+    assert order["currentStage"] == "delivery"
+    assert order["stages"]["return"]["status"] == "waiting"
+    assert order["stages"]["refund"]["status"] == "waiting"
+
+
+def test_legacy_delivered_order_is_presented_as_delivery_without_rewriting_it(system):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    repository.db.orders.update_one({"id": order["id"]}, {"$set": {
+        "status": "completed", "currentStage": "return", "stages.delivery.status": "completed",
+        "stages.return.status": "ready",
+    }})
+    response = client.get(f"/api/orders/{order['id']}")
+    assert response.status_code == 200
+    assert response.json()["currentStage"] == "delivery"
+    assert repository.get_order(order["id"])["currentStage"] == "return"
 
 
 def test_marketing_can_book_orders_and_admin_can_delete_unused_users(system):

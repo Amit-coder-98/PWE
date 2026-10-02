@@ -62,7 +62,10 @@ select.field { appearance: none; padding-right: 3rem; background-image: url("dat
 #root, main#main-content { width: 100%; min-width: 0; max-width: 100%; }
 #root > .app-shell { width: 100%; min-width: 0; max-width: 100%; }
 main#main-content > * { min-width: 0; max-width: 100%; }
+main#main-content .grid > * { min-width: 0; }
 .surface { min-width: 0; max-width: 100%; }
+.surface :is(h1, h2, h3, dl, article), .order-detail p { min-width: 0; overflow-wrap: anywhere; }
+.primary-button > svg, .secondary-button > svg { flex-shrink: 0; }
 input, select, textarea { max-width: 100%; }
 
 @media (max-width: 767px) {
