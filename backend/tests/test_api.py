@@ -394,7 +394,7 @@ def test_no_image_completes_design_but_plate_remains(system):
     assert response.json()["stages"]["printing"]["status"] == "waiting"
 
 
-def test_design_upload_and_customer_rejection_requires_reason(system):
+def test_legacy_customer_review_still_requires_rejection_reason(system):
     client, repository = system
     headers = login(client)
     order = create_order(client, headers)
@@ -402,6 +402,8 @@ def test_design_upload_and_customer_rejection_requires_reason(system):
     assert intent.status_code == 200, intent.text
     asset_id = intent.json()["asset"]["id"]
     assert client.post(f"/api/design-assets/{asset_id}/complete", headers=headers).status_code == 200
+    # Preserve coverage for older artwork that entered the review workflow.
+    repository.update_asset(asset_id, {"status": "available"})
     link = client.post(f"/api/orders/{order['id']}/design/review-link", headers=headers, json={"assetId": asset_id})
     token = link.json()["token"]
     assert client.get(f"/api/public/reviews/{token}").status_code == 200
@@ -435,14 +437,52 @@ def test_real_image_upload_complete_and_view(system, monkeypatch, image_format, 
     asset_id = intent.json()["asset"]["id"]
     result = client.post(f"/api/design-assets/{asset_id}/complete", headers=headers)
     assert result.status_code == 200, result.text
-    assert result.json()["status"] == "available"
+    assert result.json()["status"] == ("available" if asset_type == "payment_proof" else "approved")
     assert repository.get_asset(asset_id)["contentType"] == detected_type
     assert client.get(f"/api/design-assets/{asset_id}/view-url").status_code == 200
     assert client.app.state.storage.deleted == []
     if asset_type == "design":
+        saved_order = repository.get_order(order["id"])
+        assert saved_order["stages"]["design"]["status"] == "ready"
+        assert saved_order["stages"]["plate"]["status"] == "waiting"
         review = client.post(f"/api/orders/{order['id']}/design/review-link", headers=headers, json={"assetId": asset_id})
-        assert review.status_code == 200, review.text
-        assert client.get(f"/api/public/reviews/{review.json()['token']}").status_code == 200
+        assert review.status_code == 422, review.text
+
+
+@pytest.mark.parametrize("uploader_role", ["admin", "marketing"])
+def test_staff_upload_is_approved_and_designer_can_view_then_prepare(system, uploader_role):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    add_staff(repository, "designer", "designer", "designer@test.example.com")
+    if uploader_role == "marketing":
+        add_staff(repository, "marketing", "marketing", "marketing@test.example.com")
+        client.post("/api/auth/logout", headers=headers)
+        headers = login(client, "marketing@test.example.com")
+    design = client.post(f"/api/orders/{order['id']}/design-assets/upload-intent", headers=headers,
+                         json={"fileName": "approved.jpg", "contentType": "image/jpeg", "size": 2048}).json()["asset"]
+    completed = client.post(f"/api/design-assets/{design['id']}/complete", headers=headers)
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "approved"
+    assert completed.json()["approvalSource"] == "staff_upload"
+    assert repository.get_order(order["id"])["version"] == order["version"]
+    assert repository.get_order(order["id"])["stages"]["design"]["status"] == "ready"
+    client.post("/api/auth/logout", headers=headers)
+    designer_headers = login(client, "designer@test.example.com")
+    visible = client.get(f"/api/orders/{order['id']}")
+    assert visible.status_code == 200, visible.text
+    assert [asset["id"] for asset in visible.json()["designAssets"]] == [design["id"]]
+    assert client.get(f"/api/design-assets/{design['id']}/view-url").status_code == 200
+    assert client.post(f"/api/orders/{order['id']}/design-assets/upload-intent", headers=designer_headers,
+                       json={"fileName": "other.jpg", "contentType": "image/jpeg", "size": 2048}).status_code == 403
+    assert client.post(f"/api/orders/{order['id']}/design/review-link", headers=designer_headers,
+                       json={"assetId": design["id"]}).status_code == 403
+    prepared = client.post(f"/api/orders/{order['id']}/stages/design", headers=designer_headers,
+                           json={"action": "complete", "expectedVersion": visible.json()["version"]})
+    assert prepared.status_code == 200, prepared.text
+    assert prepared.json()["stages"]["design"]["status"] == "completed"
+    assert prepared.json()["stages"]["plate"]["status"] == "ready"
+    assert prepared.json()["stages"]["printing"]["status"] == "waiting"
 
 
 def test_private_asset_view_requires_order_and_role_access(system):

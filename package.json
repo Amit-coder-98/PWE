@@ -10,6 +10,7 @@
     "test:notifications": "npm run test:notifications --workspace=frontend",
     "test:uploads": "npm run test:uploads --workspace=frontend",
     "test:pricing": "npm run test:pricing --workspace=frontend",
+    "test:artwork": "npm run test:artwork --workspace=frontend",
     "preview": "npm run preview --workspace=frontend"
   }
 }

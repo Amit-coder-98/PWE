@@ -18,7 +18,7 @@ export interface AuditEvent {
   id: string; orderId: string; actorName: string; actorRole: string; stage: StageKey; message: string; details: Record<string, unknown>; at: string
 }
 export interface DesignAsset {
-  id: string; orderId: string; version: number; fileName: string; contentType: string; size?: number; expectedSize: number; width?: number; height?: number; status: 'pending' | 'available' | 'in_review' | 'approved' | 'changes_requested' | 'rejected' | 'deleted'; uploadedByName: string; createdAt: string; decisionReason?: string; validationError?: string
+  id: string; orderId: string; version: number; fileName: string; contentType: string; assetType?: 'design' | 'payment_proof'; size?: number; expectedSize: number; width?: number; height?: number; status: 'pending' | 'available' | 'in_review' | 'approved' | 'changes_requested' | 'rejected' | 'deleted'; uploadedByName: string; createdAt: string; decisionReason?: string; validationError?: string
 }
 export interface Order {
   id: string; orderNumber: string; customerId: string; customer: string; contactPerson: string; phone: string; alternativePhone?: string; gstNumber?: string; product: string; quantity: number; amount: number; bagType?: string; bagSize?: string; printingColor?: string; ratePerBag?: number; advancePaid?: number; remainingAmount?: number; orderDate: string; expectedDelivery: string; priority: Priority; currentStage: StageKey; stages: Record<StageKey, StageState>; version: number; status: string; notes?: string; createdAt: string; updatedAt: string; closedAt?: string; activity?: AuditEvent[]; designAssets?: DesignAsset[]

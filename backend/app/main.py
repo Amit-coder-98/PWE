@@ -505,13 +505,20 @@ def create_app(settings_override: Settings | None = None, repository_override: M
             storage.delete(asset["objectKey"])
             repository.update_asset(asset_id, {"status": "rejected", "validationError": str(exc)})
             raise HTTPException(422, str(exc)) from exc
-        active = repository.update_asset(asset_id, {"status": "available", **verified, "verifiedAt": now()})
         is_payment_proof = asset.get("assetType") == "payment_proof"
+        timestamp = now()
+        fields = {"status": "available" if is_payment_proof else "approved", **verified, "verifiedAt": timestamp}
+        if not is_payment_proof:
+            fields.update(approvalSource="staff_upload", approvedAt=timestamp, approvedBy=actor["id"])
+            repository.revoke_reviews(asset["orderId"])
+        # Approved customer artwork is a reference for the Designer, not proof
+        # that Design preparation has been performed. Leave the stage pending.
+        active = repository.update_asset(asset_id, fields)
         repository.add_audit(
             asset["orderId"],
             actor,
             "payment" if is_payment_proof else "design",
-            "Uploaded advance payment proof." if is_payment_proof else f"Uploaded design version {asset['version']}.",
+            "Uploaded advance payment proof." if is_payment_proof else f"Uploaded customer-approved design version {asset['version']} for Designer preparation.",
             {"assetId": asset_id, "fileName": asset["fileName"]},
         )
         return active

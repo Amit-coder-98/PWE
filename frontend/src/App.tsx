@@ -21,7 +21,6 @@ import {
   Clipboard,
   ClipboardList,
   Download,
-  Eye,
   Factory,
   HelpCircle,
   ImagePlus,
@@ -43,15 +42,16 @@ import {
   Scissors,
   ShieldCheck,
   Truck,
-  Upload,
   Users,
   X,
 } from "lucide-react";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { DesignWorkspace } from "./components/DesignWorkspace";
 import { StatusBadge } from "./components/StatusBadge";
 import { ToastHost } from "./components/ToastHost";
 import { api, ApiError } from "./lib/api";
 import { formatMoney as money, orderTotal, remainingAmount } from "./lib/money";
+import { artworkAccess } from "./lib/artwork";
 import {
   canManageStage,
   nextInstruction,
@@ -63,7 +63,6 @@ import {
 import { toast, useApp } from "./state/AppContext";
 import type {
   Customer,
-  DesignAsset,
   Order,
   Role,
   StageKey,
@@ -133,7 +132,7 @@ const roleVisuals: Record<Role, { icon: typeof Users; color: string; soft: strin
 const roleResponsibilities: Record<Role, string> = {
   admin: "All orders and team administration",
   cutting_master: "Material availability and cutting",
-  designer: "Design creation and customer approval",
+  designer: "View customer artwork and prepare the design",
   transport_manager: "Plate preparation and dispatch",
   printing_operator: "Printing and quality check",
   manager: "Stitching, packing and delivery challan",
@@ -2053,7 +2052,7 @@ function NewOrderPage() {
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-900 text-sm font-bold text-white">D</span>
             <div>
               <h2 className="text-lg font-bold text-navy-900">Design file</h2>
-              <p className="mt-0.5 text-sm text-slate-600">Optional. Add the customer’s artwork now, or the Designer can add it later.</p>
+              <p className="mt-0.5 text-sm text-slate-600">Optional. Upload customer-approved artwork now, or Marketing / Admin can add it later. The Designer can view it while preparing the design.</p>
             </div>
           </div>
           <label className="mt-4 flex min-h-28 cursor-pointer items-center gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 transition hover:border-sky-400 hover:bg-sky-50">
@@ -2216,7 +2215,7 @@ function OrderDetailPage() {
   const currentVisual = roleVisuals[currentRole];
   const CurrentRoleIcon = currentVisual.icon;
   const canEditOrder = ["admin", "marketing"].includes(currentUser.role);
-  const canManageDesignApproval = ["admin", "marketing"].includes(currentUser.role);
+  const canViewDesignImages = artworkAccess(currentUser.role).canView;
   const usesDetailedTaskScreen = currentUser.role === "marketing";
   const openOrderEdit = () => {
     setEditError("");
@@ -2405,8 +2404,8 @@ function OrderDetailPage() {
           <button className="primary-button mt-4" onClick={() => setMaterialAvailableConfirm(true)}>Mark material available</button>
         </section>
       )}
-      {canManageDesignApproval && (
-        <DesignWorkspace order={order} setOrder={setOrder} reload={reload} />
+      {canViewDesignImages && (
+        <DesignWorkspace order={order} setOrder={setOrder} reload={reload} role={currentUser.role} />
       )}
       <section className="mt-4 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
         <div className="surface p-5">
@@ -2489,14 +2488,14 @@ function OrderDetailPage() {
               <Field name="bagType" label="Type of bag *" defaultValue={order.bagType ?? order.product} required />
               <Field name="bagSize" label="Bag size *" defaultValue={order.bagSize} required />
               <Field name="printingColor" label="Colour of printing *" defaultValue={order.printingColor} required />
-              <label><span className="label mt-4">Rate per bag (₹) *</span><input className="field" type="number" min="0" step="1" required value={editRate} onChange={(event) => setEditRate(event.target.value)} /></label>
+              <label><span className="label mt-4">Rate per bag (₹) *</span><input className="field" type="number" min="0" step="0.01" required value={editRate} onChange={(event) => setEditRate(event.target.value)} /></label>
               <label><span className="label mt-4">Number of bags *</span><input className="field" type="number" min="1" required value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} /></label>
               <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-sky-800">Total amount</p><p className="mt-1 text-xl font-extrabold text-navy-900">₹ {editTotal.toLocaleString("en-IN")}</p></div>
               <Field name="expectedDelivery" label="Delivery date *" type="date" defaultValue={order.expectedDelivery} required />
             </div>
             <h3 className="mt-6 border-t border-slate-200 pt-5 font-bold text-navy-900">Payment and note</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label><span className="label mt-4">Advance amount (₹)</span><input className="field" type="number" min="0" max={editTotal || undefined} step="1" value={editAdvance} onChange={(event) => setEditAdvance(event.target.value)} /></label>
+              <label><span className="label mt-4">Advance amount (₹)</span><input className="field" type="number" min="0" max={editTotal || undefined} step="0.01" value={editAdvance} onChange={(event) => setEditAdvance(event.target.value)} /></label>
               <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-600">Remaining / due amount</p><p className="mt-1 text-xl font-extrabold text-navy-900">₹ {editDue.toLocaleString("en-IN")}</p></div>
               <label><span className="label mt-4">Priority</span><select className="field" name="priority" defaultValue={order.priority}><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
             </div>
@@ -2587,401 +2586,6 @@ function OrderDetailPage() {
   );
 }
 
-function DesignWorkspace({
-  order,
-  setOrder,
-  reload,
-}: {
-  order: Order;
-  setOrder: (order: Order) => void;
-  reload: () => Promise<void>;
-}) {
-  const [file, setFile] = useState<File | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [link, setLink] = useState("");
-  const [confirm, setConfirm] = useState<{
-    type: "no-image" | "review";
-    asset?: DesignAsset;
-  } | null>(null);
-  const [noImageNote, setNoImageNote] = useState(
-    "Customer confirmed that no image was supplied.",
-  );
-  const assets = order.designAssets ?? [];
-  const [staffOpen, setStaffOpen] = useState(false);
-  const [staffDecision, setStaffDecision] = useState<
-    "approved" | "changes_requested"
-  >("approved");
-  const [channel, setChannel] = useState("whatsapp");
-  const [customerName, setCustomerName] = useState(order.contactPerson);
-  const [staffReason, setStaffReason] = useState("");
-  const [staffConfirm, setStaffConfirm] = useState(false);
-  const activeReviewAsset = assets.find(
-    (asset) => asset.status === "in_review",
-  );
-  const upload = async () => {
-    if (!file) return;
-    if (
-      file.size <= 0 ||
-      file.size > 10 * 1024 * 1024
-    )
-      return toast("Choose a JPG, PNG, or WebP image up to 10 MB.", "error");
-    setBusy(true);
-    try {
-      const intent = await api.uploadIntent(order.id, file);
-      await api.uploadToR2(intent.uploadUrl, file, setProgress);
-      await api.completeUpload(intent.asset.id);
-      setOrder(await api.order(order.id));
-      setFile(null);
-      setProgress(0);
-      toast("Design image uploaded and verified.");
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "Upload failed.", "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const view = async (asset: DesignAsset) => {
-    try {
-      const result = await api.viewAsset(asset.id);
-      window.open(result.url, "_blank", "noopener,noreferrer");
-    } catch (error) {
-      toast(
-        error instanceof Error ? error.message : "Image unavailable.",
-        "error",
-      );
-    }
-  };
-  const createLink = async (asset: DesignAsset) => {
-    setBusy(true);
-    try {
-      const result = await api.reviewLink(order.id, asset.id);
-      const url = `${window.location.origin}${result.path}`;
-      setLink(url);
-      await navigator.clipboard.writeText(url).catch(() => undefined);
-      setOrder(await api.order(order.id));
-      toast("Secure seven-day link created and copied.");
-    } catch (error) {
-      toast(
-        error instanceof Error ? error.message : "Could not create link.",
-        "error",
-      );
-    } finally {
-      setBusy(false);
-      setConfirm(null);
-    }
-  };
-  const noImage = async () => {
-    setBusy(true);
-    try {
-      const updated = await api.noImage(order, noImageNote);
-      setOrder({ ...updated, activity: order.activity, designAssets: assets });
-      await reload();
-      toast("No customer image confirmed. Plate preparation is now ready.");
-    } catch (error) {
-      toast(
-        error instanceof Error ? error.message : "Could not confirm.",
-        "error",
-      );
-    } finally {
-      setBusy(false);
-      setConfirm(null);
-    }
-  };
-  const recordStaffResponse = async () => {
-    if (!activeReviewAsset) return;
-    if (staffDecision === "changes_requested" && staffReason.trim().length < 3)
-      return toast("Explain what the customer wants changed.", "error");
-    setBusy(true);
-    try {
-      await api.staffDecision(order.id, {
-        assetId: activeReviewAsset.id,
-        decision: staffDecision,
-        channel,
-        customerName,
-        reason: staffReason || undefined,
-      });
-      setOrder(await api.order(order.id));
-      setStaffOpen(false);
-      setStaffConfirm(false);
-      toast("Customer response recorded with staff details.");
-    } catch (error) {
-      toast(
-        error instanceof Error ? error.message : "Could not record response.",
-        "error",
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="surface mt-4 p-5" id="design-workspace">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="eyebrow">Marketing / Admin</p>
-          <h2 className="mt-1 text-xl font-bold text-navy-900">
-            Artwork and customer approval
-          </h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Upload the final artwork, then send it to the customer for approval or record their response here. The Designer does not manage this step.
-          </p>
-        </div>
-        {order.stages.design.status !== "completed" && (
-          <button
-            className="secondary-button"
-            onClick={() => setConfirm({ type: "no-image" })}
-          >
-            No customer image
-          </button>
-        )}
-      </div>
-      <div className="mt-5 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
-        <div className="rounded-xl border-2 border-dashed border-slate-300 p-5 text-center">
-          <ImagePlus className="mx-auto size-9 text-slate-400" />
-          <label className="primary-button mt-4">
-            <Upload className="size-4" />
-            Choose image
-            <input
-              className="sr-only"
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            />
-          </label>
-          <p className="mt-3 text-xs text-slate-500">
-            JPG, PNG or WebP · Maximum 10 MB
-          </p>
-          {file && (
-            <div className="mt-4 rounded-lg bg-slate-50 p-3 text-left text-sm">
-              <p className="truncate font-semibold">{file.name}</p>
-              <p className="text-xs text-slate-500">
-                {(file.size / 1024 / 1024).toFixed(2)} MB
-              </p>
-              <button
-                className="primary-button mt-3 w-full"
-                onClick={() => void upload()}
-                disabled={busy}
-              >
-                {busy ? `Uploading ${progress}%` : "Upload as new version"}
-              </button>
-            </div>
-          )}
-        </div>
-        <div>
-          <h3 className="font-bold text-navy-900">Version history</h3>
-          <div className="mt-3 space-y-2">
-            {assets.map((asset) => (
-              <article
-                className="rounded-xl border border-slate-200 p-3"
-                key={asset.id}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-bold">
-                      Version {asset.version} · {asset.fileName}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {asset.uploadedByName} · {dateTime(asset.createdAt)}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold">
-                    {asset.status.replace("_", " ")}
-                  </span>
-                </div>
-                {asset.status === "rejected" && (
-                  <p className="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-800">
-                    Upload failed: {asset.validationError || "The image could not be verified."} Choose the image again to retry.
-                  </p>
-                )}
-                {asset.decisionReason && (
-                  <p className="mt-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
-                    Customer note: {asset.decisionReason}
-                  </p>
-                )}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    className="secondary-button"
-                    onClick={() => void view(asset)}
-                    disabled={["pending", "rejected", "deleted"].includes(asset.status)}
-                  >
-                    <Eye className="size-4" />
-                    View
-                  </button>
-                  {asset.status === "available" && (
-                    <button
-                      className="primary-button"
-                      onClick={() => setConfirm({ type: "review", asset })}
-                    >
-                      Send for approval
-                    </button>
-                  )}
-                  {asset.status === "in_review" && (
-                    <button
-                      className="secondary-button"
-                      onClick={() => setStaffOpen(true)}
-                    >
-                      Record staff-assisted response
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
-            {!assets.length && (
-              <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-                No image versions uploaded. Uploading is optional.
-              </p>
-            )}
-          </div>
-          {link && (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-              <p className="text-sm font-bold text-emerald-900">
-                Customer link (valid 7 days)
-              </p>
-              <div className="mt-2 flex gap-2">
-                <input className="field" readOnly value={link} />
-                <button
-                  className="secondary-button"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(link);
-                    toast("Link copied.");
-                  }}
-                >
-                  <Clipboard className="size-4" />
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-emerald-800">
-                Send manually by WhatsApp, email, or SMS.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-      {confirm?.type === "no-image" && (
-        <Modal title="Confirm no customer image" close={() => setConfirm(null)}>
-          <p className="text-sm leading-6 text-slate-600">
-            This completes Design but Plate remains required before Printing.
-          </p>
-          <label className="label mt-4">Confirmation note</label>
-          <textarea
-            className="field min-h-24 py-3"
-            value={noImageNote}
-            onChange={(event) => setNoImageNote(event.target.value)}
-          />
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <button
-              className="secondary-button"
-              onClick={() => setConfirm(null)}
-            >
-              Cancel
-            </button>
-            <button
-              className="primary-button"
-              disabled={busy || noImageNote.length < 3}
-              onClick={() => void noImage()}
-            >
-              Yes, confirm
-            </button>
-          </div>
-        </Modal>
-      )}
-      {staffOpen && (
-        <Modal
-          title="Record customer response"
-          close={() => setStaffOpen(false)}
-        >
-          <p className="text-sm leading-6 text-slate-600">
-            Use this only when the customer replied by phone, WhatsApp, or in
-            person. Your account will be recorded in the audit history.
-          </p>
-          <label className="label mt-4">Customer name</label>
-          <input
-            className="field"
-            value={customerName}
-            onChange={(event) => setCustomerName(event.target.value)}
-          />
-          <label className="label mt-4">Response channel</label>
-          <select
-            className="field"
-            value={channel}
-            onChange={(event) => setChannel(event.target.value)}
-          >
-            <option value="whatsapp">WhatsApp</option>
-            <option value="phone">Phone</option>
-            <option value="in_person">In person</option>
-          </select>
-          <label className="label mt-4">Customer decision</label>
-          <select
-            className="field"
-            value={staffDecision}
-            onChange={(event) =>
-              setStaffDecision(
-                event.target.value as "approved" | "changes_requested",
-              )
-            }
-          >
-            <option value="approved">Approved</option>
-            <option value="changes_requested">Requested changes</option>
-          </select>
-          {staffDecision === "changes_requested" && (
-            <>
-              <label className="label mt-4">What should change?</label>
-              <textarea
-                className="field min-h-24 py-3"
-                value={staffReason}
-                onChange={(event) => setStaffReason(event.target.value)}
-              />
-            </>
-          )}
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <button
-              className="secondary-button"
-              onClick={() => setStaffOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="primary-button"
-              disabled={
-                customerName.length < 2 ||
-                (staffDecision === "changes_requested" &&
-                  staffReason.length < 3)
-              }
-              onClick={() => setStaffConfirm(true)}
-            >
-              Review response
-            </button>
-          </div>
-        </Modal>
-      )}
-      <ConfirmDialog
-        open={confirm?.type === "review"}
-        title="Send this design to the customer?"
-        message={`Version ${confirm?.asset?.version ?? ""} will become the only active review. Any older customer link will stop working.`}
-        confirmLabel="Yes, create link"
-        onCancel={() => setConfirm(null)}
-        onConfirm={() => {
-          if (confirm?.asset) void createLink(confirm.asset);
-        }}
-      />
-      <ConfirmDialog
-        open={staffConfirm}
-        title="Record this customer decision?"
-        message={
-          staffDecision === "approved"
-            ? `Confirm that ${customerName} approved this design via ${channel}. Plate preparation will become ready.`
-            : `Confirm that ${customerName} requested changes via ${channel}. The designer will need to create a new version.`
-        }
-        confirmLabel={
-          staffDecision === "approved"
-            ? "Yes, record approval"
-            : "Yes, request changes"
-        }
-        onCancel={() => setStaffConfirm(false)}
-        onConfirm={() => void recordStaffResponse()}
-      />
-    </section>
-  );
-}
 
 function TeamPage() {
   const { users, createUser, currentUser, reload } = useApp();

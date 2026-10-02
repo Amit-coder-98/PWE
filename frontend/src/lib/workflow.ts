@@ -3,7 +3,7 @@ import type { Order, Role, StageKey, StageStatus } from '../types'
 export const stageInfo: Record<StageKey, { label: string; short: string; role: Role; help: string }> = {
   order: { label: 'Order booked', short: 'Order', role: 'admin', help: 'Customer order is confirmed and ready for preparation.' },
   material: { label: 'Material available', short: 'Material', role: 'cutting_master', help: 'Check and reserve the required bag material.' },
-  design: { label: 'Design preparation', short: 'Design', role: 'designer', help: 'Prepare the final artwork. Marketing or Admin records customer approval.' },
+  design: { label: 'Design preparation', short: 'Design', role: 'designer', help: 'View the customer-approved image uploaded by Marketing or Admin and complete artwork preparation.' },
   cutting: { label: 'Cutting', short: 'Cutting', role: 'cutting_master', help: 'Cut material to the required bag specification.' },
   plate: { label: 'Plate preparation', short: 'Plate', role: 'transport_manager', help: 'Prepare the printing plate from the approved design.' },
   printing: { label: 'Printing', short: 'Printing', role: 'printing_operator', help: 'Printing starts after cutting and plate preparation are complete.' },
