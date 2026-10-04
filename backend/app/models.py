@@ -90,12 +90,22 @@ class UserCreate(BaseModel):
     department: str = Field(min_length=2, max_length=100)
     temporaryPassword: str = Field(min_length=10, max_length=128)
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
 
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=100)
     role: Role | None = None
     department: str | None = Field(default=None, min_length=2, max_length=100)
     active: bool | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class PasswordResetRequest(BaseModel):
@@ -255,6 +265,9 @@ class OrderDocument(BaseModel):
     version: int
     status: str = "active"
     notes: str | None = None
+    createdBy: str | None = None
+    createdByName: str | None = None
+    createdByRole: Role | None = None
     createdAt: datetime
     updatedAt: datetime
     closedAt: datetime | None = None

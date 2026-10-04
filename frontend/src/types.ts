@@ -21,6 +21,7 @@ export interface DesignAsset {
   id: string; orderId: string; version: number; fileName: string; contentType: string; assetType?: 'design' | 'payment_proof'; size?: number; expectedSize: number; width?: number; height?: number; status: 'pending' | 'available' | 'in_review' | 'approved' | 'changes_requested' | 'rejected' | 'deleted'; uploadedByName: string; createdAt: string; decisionReason?: string; validationError?: string
 }
 export interface Order {
+  createdBy?: string | null; createdByName?: string | null; createdByRole?: Role | null; paymentProofs?: DesignAsset[]
   id: string; orderNumber: string; customerId: string; customer: string; contactPerson: string; phone: string; alternativePhone?: string; gstNumber?: string; product: string; quantity: number; amount: number; bagType?: string; bagSize?: string; printingColor?: string; ratePerBag?: number; advancePaid?: number; remainingAmount?: number; orderDate: string; expectedDelivery: string; priority: Priority; currentStage: StageKey; stages: Record<StageKey, StageState>; version: number; status: string; notes?: string; createdAt: string; updatedAt: string; closedAt?: string; activity?: AuditEvent[]; designAssets?: DesignAsset[]
 }
 export interface ApiErrorBody { code: string; message: string; requestId?: string; fields?: Array<{ field: string; message: string }> }

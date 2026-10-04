@@ -203,7 +203,8 @@ class MongoRepository:
             "orderDate": timestamp.date().isoformat(), "expectedDelivery": payload["expectedDelivery"],
             "priority": payload.get("priority", "normal"), "notes": payload.get("notes"),
             "currentStage": "material", "stages": initial_stages(), "version": 1, "status": "active",
-            "createdBy": actor["id"], "createdAt": timestamp, "updatedAt": timestamp, "closedAt": None,
+            "createdBy": actor["id"], "createdByName": actor["name"], "createdByRole": actor["role"],
+            "createdAt": timestamp, "updatedAt": timestamp, "closedAt": None,
         }
         self.db.orders.insert_one(document.copy())
         self.db.customers.update_one({"id": customer["id"]}, {"$set": {"active": True, "updatedAt": timestamp}})
@@ -258,6 +259,12 @@ class MongoRepository:
                 {"_id": 0},
             ).sort("version", -1)
         ]
+
+    def list_payment_proofs(self, order_id: str) -> list[dict]:
+        # Never mix financial screenshots into the Designer's artwork list.
+        return [clean(item) for item in self.db.design_assets.find(
+            {"orderId": order_id, "assetType": "payment_proof"}, {"_id": 0},
+        ).sort("createdAt", -1)]
 
     def update_asset(self, asset_id: str, fields: dict) -> dict | None:
         fields["updatedAt"] = now()

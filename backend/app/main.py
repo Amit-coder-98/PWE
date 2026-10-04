@@ -174,13 +174,27 @@ def create_app(settings_override: Settings | None = None, repository_override: M
         if not can_access_order(document, actor):
             raise HTTPException(403, "This order is not currently assigned to your work.")
 
-    def visible_order(document: dict, actor: dict) -> dict:
+    def visible_order(document: dict, actor: dict, bookers: dict | None = None) -> dict:
         result = deepcopy(document)
+        # Old orders contain the creator ID but predate the name snapshot.
+        # Enrich their response only; do not rewrite legacy business records.
+        creator_id = result.get("createdBy")
+        if creator_id and not result.get("createdByName"):
+            creator = bookers.get(creator_id) if bookers is not None else repository.get_user(creator_id)
+            if creator:
+                result["createdByName"] = creator["name"]
+                result["createdByRole"] = creator["role"]
         # Correct the presentation of previously delivered records without
         # rewriting their history or modifying the database on a read.
         if result.get("status") == "completed":
             result["currentStage"] = StageKey.DELIVERY.value
         role = effective_role(actor)
+        # Only detail responses include image lists. Avoid storage/database
+        # lookups for every row in the order register.
+        if "designAssets" in result:
+            result["paymentProofs"] = repository.list_payment_proofs(result["id"]) if role in {Role.ADMIN, Role.MARKETING, Role.ACCOUNTANT} else []
+        elif role not in {Role.ADMIN, Role.MARKETING, Role.ACCOUNTANT}:
+            result.pop("paymentProofs", None)
         if role not in {Role.ADMIN, Role.ACCOUNTANT}:
             result["amount"] = 0
             result["ratePerBag"] = None
@@ -276,6 +290,8 @@ def create_app(settings_override: Settings | None = None, repository_override: M
     @application.patch("/api/users/{user_id}", response_model=UserPublic, dependencies=[Depends(require_csrf)])
     def update_user(user_id: str, payload: UserUpdate, _: dict = Depends(admin)):
         fields = {key: (value.value if isinstance(value, Role) else value) for key, value in payload.model_dump(exclude_none=True).items()}
+        if "name" in fields:
+            fields["initials"] = initials(fields["name"])
         user = repository.update_user(user_id, fields)
         if not user:
             raise HTTPException(404, "User not found.")
@@ -328,8 +344,9 @@ def create_app(settings_override: Settings | None = None, repository_override: M
 
     @application.get("/api/orders", response_model=list[OrderDocument])
     def orders(search: str = Query(default="", max_length=100), stage: str | None = None, actor: dict = Depends(current_user)):
+        bookers = {user["id"]: user for user in repository.list_users()}
         return [
-            visible_order(document, actor)
+            visible_order(document, actor, bookers)
             for document in repository.list_orders(search, stage)
             if can_access_order(document, actor)
         ]

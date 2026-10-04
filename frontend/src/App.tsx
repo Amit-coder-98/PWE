@@ -47,11 +47,14 @@ import {
 } from "lucide-react";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { DesignWorkspace } from "./components/DesignWorkspace";
+import { PaymentProofWorkspace } from "./components/PaymentProofWorkspace";
+import { OrderProgress } from "./components/OrderProgress";
 import { StatusBadge } from "./components/StatusBadge";
 import { ToastHost } from "./components/ToastHost";
 import { api, ApiError } from "./lib/api";
 import { formatMoney as money, orderTotal, remainingAmount } from "./lib/money";
 import { artworkAccess } from "./lib/artwork";
+import { ordersByBooker } from "./lib/orderBookings";
 import { formatDate as date, formatDateTime as dateTime } from "./lib/dateTime";
 import {
   activeStages,
@@ -713,7 +716,7 @@ function Empty({
 }
 
 function DashboardPage() {
-  const { currentUser, orders, customers } = useApp();
+  const { currentUser, orders, customers, users } = useApp();
   if (!currentUser) return null;
   const canManageOrders = ["admin", "marketing"].includes(currentUser.role);
   if (!canManageOrders)
@@ -722,6 +725,7 @@ function DashboardPage() {
     (order) => order.status === "active" && activeOrderStages(order).length > 0,
   );
   const completedOrders = orders.filter((order) => order.status === "completed");
+  const bookingPeople = ordersByBooker(orders, users);
   const liveDepartments = productionStages.filter((stage) =>
     orders.some((order) => activeOrderStages(order).includes(stage)),
   );
@@ -750,6 +754,24 @@ function DashboardPage() {
         <Kpi label="Completed orders" value={completedOrders.length} to="/orders?status=completed" />
         <Kpi label="Orders in queue" value={ordersInQueue.length} to="/orders?status=active" />
       </section>
+      {currentUser.role === "admin" && (
+        <section className="surface mt-5 p-4 sm:p-5" aria-label="Orders booked by person">
+          <h2 className="text-lg font-bold text-navy-900">Who booked the orders?</h2>
+          <p className="mt-1 text-sm text-slate-500">All-time bookings per person, including active, completed and cancelled orders.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {bookingPeople.map(person => (
+              <Link className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-sky-300 hover:bg-sky-50" key={person.id} to={`/orders?booker=${encodeURIComponent(person.id)}`}>
+                <p className="break-words text-sm font-bold text-navy-900">{person.role ? `${roleLabels[person.role]} (${person.name})` : person.name}</p>
+                {person.active === false && <p className="mt-1 text-xs text-slate-500">Inactive account · historical bookings retained</p>}
+                <p className="mt-3 text-2xl font-extrabold text-brand">{person.total} <span className="text-sm font-semibold text-slate-600">order{person.total === 1 ? "" : "s"} booked</span></p>
+                <p className="mt-2 text-xs text-slate-500">{person.pending} active · {person.completed} completed · {person.cancelled} cancelled</p>
+                <p className="mt-2 text-xs font-bold text-brand">View this person's orders</p>
+              </Link>
+            ))}
+            {!bookingPeople.length && <p className="text-sm text-slate-500">Create Marketing accounts in Team to show each person's bookings here.</p>}
+          </div>
+        </section>
+      )}
       {currentUser.role === "admin" && (
         <section className="surface mt-5 p-4 sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2">
@@ -1009,7 +1031,7 @@ function BookingDateControls({
 }
 
 function OrdersPage({ queue = false }: { queue?: boolean }) {
-  const { orders, currentUser } = useApp();
+  const { orders, currentUser, users } = useApp();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState<StageKey | "all">(() => {
@@ -1059,9 +1081,10 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
     setBookingMonth("");
   };
   const dateFilterActive = Boolean(dateFrom || dateTo || bookingMonth);
+  const bookerFilter = canViewOrderRegister ? searchParams.get("booker") : null;
   const source = !canViewOrderRegister
     ? orders.filter((order) => workerStages.some((task) => activeOrderStages(order).includes(task)))
-    : orders;
+    : orders.filter(order => !bookerFilter || (order.createdBy || "__unrecorded__") === bookerFilter);
   const result = source
     .filter(
       (order) =>
@@ -1114,6 +1137,10 @@ function OrdersPage({ queue = false }: { queue?: boolean }) {
         }
       />
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-[0_1px_3px_rgba(15,23,42,.04)] sm:px-4">
+        {bookerFilter && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-sky-50 p-3 text-sm">
+          <p className="min-w-0 break-words font-semibold text-sky-900">Showing bookings by {users.find(user => user.id === bookerFilter)?.name || source[0]?.createdByName || (bookerFilter === "__unrecorded__" ? "user not recorded" : "the selected staff member")} ({source.length}).</p>
+          <Link className="font-bold text-brand" to="/orders">Clear person filter</Link>
+        </div>}
         <SearchField
           id="order-search"
           label="Search orders"
@@ -1339,6 +1366,7 @@ function OrderListRow({ order, visibleStages }: { order: Order; visibleStages?: 
           Open <ChevronRight className="size-4 transition group-hover:translate-x-0.5" />
         </span>
       </div>
+      <div className="xl:col-span-5"><OrderProgress order={order} compact /></div>
     </Link>
   );
 }
@@ -1374,6 +1402,7 @@ function OrderCard({ order }: { order: Order }) {
           </span>
         )}
       </div>
+      <OrderProgress order={order} compact />
       <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs">
         <span>
           <b className="block text-slate-500">Delivery</b>
@@ -2338,6 +2367,7 @@ function OrderDetailPage() {
               <p className="mt-2 text-sm text-slate-300">
                 {order.product} · {order.quantity.toLocaleString("en-IN")} bags
               </p>
+              <p className="mt-2 text-xs text-slate-300">Booked by: {order.createdByName || "Not recorded"}{order.createdByRole && ` (${roleLabels[order.createdByRole]})`}</p>
             </div>
             <div className="flex w-full max-w-full flex-wrap items-start gap-3 xl:w-auto xl:justify-end">
               {canEditOrder && order.status === "active" && (
@@ -2372,6 +2402,7 @@ function OrderDetailPage() {
           </div>
         </div>
       </section>
+      <OrderProgress order={order} />
       <section className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-5">
         <p className="eyebrow">What should happen next?</p>
           <div className="mt-2 flex items-start gap-3">
@@ -2402,6 +2433,7 @@ function OrderDetailPage() {
       {canViewDesignImages && (
         <DesignWorkspace order={order} setOrder={setOrder} reload={reload} role={currentUser.role} />
       )}
+      <PaymentProofWorkspace order={order} role={currentUser.role} />
       <section className="mt-4 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
         <div className="surface p-5">
           <h2 className="flex items-center gap-2 font-bold text-navy-900"><Building2 className="size-5 text-sky-700" aria-hidden="true" />Customer and order</h2>
@@ -2591,10 +2623,11 @@ function TeamPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [role, setRole] = useState<Role>("cutting_master");
   const [managedUser, setManagedUser] = useState<User | null>(null);
+  const [managedName, setManagedName] = useState("");
   const [managedRole, setManagedRole] = useState<Role>("cutting_master");
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [accountAction, setAccountAction] = useState<
-    "activate" | "deactivate" | "reset" | "role" | "delete" | null
+    "activate" | "deactivate" | "reset" | "role" | "name" | "delete" | null
   >(null);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2604,7 +2637,7 @@ function TeamPage() {
     const form = new FormData(event.currentTarget);
     try {
       await createUser({
-        name: String(form.get("name")),
+        name: String(form.get("name")).trim(),
         email: String(form.get("email")),
         role,
         department: String(form.get("department")),
@@ -2631,6 +2664,9 @@ function TeamPage() {
         toast(
           "Temporary password reset. The employee must change it after sign-in.",
         );
+      } else if (accountAction === "name") {
+        await api.updateUser(managedUser.id, { name: managedName.trim() });
+        toast("Full name updated. This person's booking counts stay linked to their account.");
       } else if (accountAction === "role") {
         await api.updateUser(managedUser.id, {
           role: managedRole,
@@ -2708,6 +2744,7 @@ function TeamPage() {
                 className="secondary-button mt-3 w-full"
                 onClick={() => {
                   setManagedUser(user);
+                  setManagedName(user.name);
                   setManagedRole(operatingRole(user.role));
                 }}
               >
@@ -2726,7 +2763,8 @@ function TeamPage() {
       {open && (
         <Modal title="Create staff account" close={() => setOpen(false)}>
           <form onSubmit={submit}>
-            <Field name="name" label="Full name" required error={fieldErrors.name} />
+            <Field name="name" label="Full name *" placeholder="Example: Ganesh Kalekar" minLength={2} maxLength={100} required error={fieldErrors.name} />
+            <p className="mt-2 text-xs text-slate-500">Enter the person's name, not the department title. You can create multiple Marketing users with separate names and login emails.</p>
             <Field
               name="email"
               label="Work email"
@@ -2735,8 +2773,9 @@ function TeamPage() {
               required
               error={fieldErrors.email}
             />
-            <label className="label mt-4">Role</label>
+            <label className="label mt-4" htmlFor="staff-role">Title / role</label>
             <select
+              id="staff-role"
               className="field"
               value={role}
               onChange={(event) => setRole(event.target.value as Role)}
@@ -2756,6 +2795,7 @@ function TeamPage() {
               value={departmentFor[role]}
               readOnly
             />
+            <p className="mt-2 text-sm font-semibold text-sky-900">Title: {roleLabels[role]} · Full name: entered above</p>
             <Field
               name="temporaryPassword"
               label="Temporary password"
@@ -2798,6 +2838,9 @@ function TeamPage() {
             <strong>{roleLabels[managedUser.role]}</strong> ·{" "}
             {managedUser.department}
           </p>
+          <label className="label mt-5" htmlFor="staff-full-name">Full name</label>
+          <input id="staff-full-name" className="field" maxLength={100} value={managedName} onChange={event => setManagedName(event.target.value)} />
+          <button className="secondary-button mt-3 w-full" disabled={busy || managedName.trim().length < 2 || managedName.trim() === managedUser.name} onClick={() => setAccountAction("name")}>Update full name</button>
           {managedUser.id !== currentUser?.id && (
             <>
               <label className="label mt-5">Factory role</label>
@@ -2862,6 +2905,8 @@ function TeamPage() {
         title={
           accountAction === "reset"
             ? "Reset this password?"
+            : accountAction === "name"
+              ? "Update this person's full name?"
             : accountAction === "delete"
               ? "Permanently delete this user?"
             : accountAction === "role"
@@ -2873,6 +2918,8 @@ function TeamPage() {
         message={
           accountAction === "reset"
             ? "The employee will be signed out on every device and must use the new temporary password."
+            : accountAction === "name"
+              ? "This updates their account name. Past order activity remains unchanged and booking counts stay linked to the same account."
             : accountAction === "delete"
               ? "This permanently removes their sign-in account and signs them out. Their past order activity stays visible for production records. This cannot be undone."
             : accountAction === "role"
@@ -2884,6 +2931,8 @@ function TeamPage() {
         confirmLabel={
           accountAction === "reset"
             ? "Yes, reset password"
+            : accountAction === "name"
+              ? "Yes, update full name"
             : accountAction === "delete"
               ? "Yes, permanently delete"
             : accountAction === "role"

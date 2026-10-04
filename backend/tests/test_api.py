@@ -529,6 +529,9 @@ def test_private_asset_view_requires_order_and_role_access(system):
     login(client, "designer@test.example.com")
     assert client.get(f"/api/design-assets/{design['id']}/view-url").status_code == 200
     assert client.get(f"/api/design-assets/{proof['id']}/view-url").status_code == 403
+    detail = client.get(f"/api/orders/{order['id']}").json()
+    assert detail["paymentProofs"] == []
+    assert [asset["id"] for asset in detail["designAssets"]] == [design["id"]]
 
 
 def test_marketing_can_upload_private_payment_proof_without_creating_design_version(system):
@@ -556,6 +559,100 @@ def test_marketing_can_upload_private_payment_proof_without_creating_design_vers
     assert repository.get_asset(proof_id)["status"] == "available"
     assert repository.list_assets(order["id"]) == []
     assert repository.list_audit(order["id"])[0]["message"] == "Uploaded advance payment proof."
+    detail = client.get(f"/api/orders/{order['id']}").json()
+    assert [asset["id"] for asset in detail["paymentProofs"]] == [proof_id]
+    assert detail["designAssets"] == []
+    assert client.get(f"/api/design-assets/{proof_id}/view-url").status_code == 200
+
+
+@pytest.mark.parametrize("role,allowed,stage", [
+    ("admin", True, "material"), ("marketing", True, "delivery"),
+    ("accountant", True, "billing"), ("designer", False, "design"),
+    ("cutting_master", False, "cutting"), ("transport_manager", False, "plate"),
+    ("printing_operator", False, "printing"), ("manager", False, "stitching"),
+])
+def test_payment_proof_detail_and_signed_view_are_role_scoped(system, role, allowed, stage):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    proof = client.post(f"/api/orders/{order['id']}/design-assets/upload-intent", headers=headers,
+                        json={"fileName": "receipt.png", "contentType": "image/png", "size": 1234, "assetType": "payment_proof"}).json()["asset"]
+    assert client.post(f"/api/design-assets/{proof['id']}/complete", headers=headers).status_code == 200
+    # Give each worker actual access to the order. Privacy must be enforced
+    # independently of whether their department owns the current task.
+    repository.db.orders.update_one({"id": order["id"]}, {"$set": {f"stages.{stage}.status": "ready"}})
+    if role != "admin":
+        add_staff(repository, "viewer", role, "viewer@test.example.com")
+        client.post("/api/auth/logout", headers=headers)
+        login(client, "viewer@test.example.com")
+    detail = client.get(f"/api/orders/{order['id']}")
+    assert detail.status_code == 200, detail.text
+    assert [asset["id"] for asset in detail.json()["paymentProofs"]] == ([proof["id"]] if allowed else [])
+    assert all(asset["assetType"] != "payment_proof" for asset in detail.json()["designAssets"])
+    assert client.get(f"/api/design-assets/{proof['id']}/view-url").status_code == (200 if allowed else 403)
+
+
+def test_existing_payment_proof_is_visible_on_closed_orders_without_backfill(system):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    # An already-stored screenshot from before the View UI was added.
+    repository.db.design_assets.insert_one({"id": "old-proof", "orderId": order["id"], "assetType": "payment_proof", "status": "available", "fileName": "old-receipt.png", "objectKey": "payment-proofs/old.png", "createdAt": datetime.now(timezone.utc)})
+    repository.db.orders.update_one({"id": order["id"]}, {"$set": {"status": "completed"}})
+    assert client.get(f"/api/orders/{order['id']}").json()["paymentProofs"][0]["id"] == "old-proof"
+    assert client.get("/api/design-assets/old-proof/view-url").status_code == 200
+    for status in ["pending", "rejected", "deleted"]:
+        repository.db.design_assets.update_one({"id": "old-proof"}, {"$set": {"status": status}})
+        assert client.get("/api/design-assets/old-proof/view-url").status_code == 404
+
+
+def test_booking_identity_survives_response_models_and_legacy_enrichment_is_read_only(system):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    assert order["createdBy"] == "admin"
+    assert order["createdByName"] == "Test Administrator"
+    assert order["createdByRole"] == "admin"
+    assert client.get("/api/orders").json()[0]["createdBy"] == "admin"
+    repository.db.orders.update_one({"id": order["id"]}, {"$unset": {"createdByName": "", "createdByRole": ""}})
+    for path in ["/api/orders", f"/api/orders/{order['id']}"]:
+        response = client.get(path)
+        item = response.json()[0] if path == "/api/orders" else response.json()
+        assert item["createdByName"] == "Test Administrator"
+        assert item["createdByRole"] == "admin"
+    assert "createdByName" not in repository.get_order(order["id"])
+
+
+def test_five_marketing_users_have_independent_names_and_booking_ids(system):
+    client, repository = system
+    headers = login(client)
+    people = []
+    for index in range(5):
+        response = client.post("/api/users", headers=headers, json={
+            "name": "  Ganesh Kalekar  " if index == 0 else f"Marketing Person {index + 1}",
+            "email": f"marketing{index + 1}@test.example.com", "role": "marketing", "department": "Marketing",
+            "temporaryPassword": "Temporary123!",
+        })
+        assert response.status_code == 200, response.text
+        people.append(response.json())
+    assert len({person["id"] for person in people}) == 5
+    assert people[0]["name"] == "Ganesh Kalekar"
+    assert people[0]["initials"] == "GK"
+    repository.update_user(people[0]["id"], {"mustChangePassword": False})
+    client.post("/api/auth/logout", headers=headers)
+    marketing_headers = login(client, people[0]["email"])
+    order = create_order(client, marketing_headers)
+    assert order["createdBy"] == people[0]["id"]
+    assert order["createdByName"] == "Ganesh Kalekar"
+    assert order["createdByRole"] == "marketing"
+    client.post("/api/auth/logout", headers=marketing_headers)
+    headers = login(client)
+    renamed = client.patch(f"/api/users/{people[0]['id']}", headers=headers, json={"name": "  Ganesh Newname  "})
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["initials"] == "GN"
+    assert client.get("/api/orders").json()[0]["createdBy"] == people[0]["id"]
+    assert repository.get_order(order["id"])["createdByName"] == "Ganesh Kalekar"
+    assert client.patch(f"/api/users/{people[0]['id']}", headers=headers, json={"name": "   "}).status_code == 422
 
 
 def test_workflow_confirmation_endpoint_version_conflict(system):

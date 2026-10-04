@@ -12,6 +12,7 @@
     "test:pricing": "npm run test:pricing --workspace=frontend",
     "test:artwork": "npm run test:artwork --workspace=frontend",
     "test:workflow": "npm run test:workflow --workspace=frontend",
+    "test:feedback": "npm run test:feedback --workspace=frontend",
     "preview": "npm run preview --workspace=frontend"
   }
 }
