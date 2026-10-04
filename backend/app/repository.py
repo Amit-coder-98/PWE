@@ -197,7 +197,7 @@ class MongoRepository:
             "alternativePhone": payload.get("alternativePhone") or customer.get("alternativePhone"),
             "gstNumber": payload.get("gstNumber") or customer.get("gstNumber"),
             "product": payload["product"], "quantity": payload["quantity"], "amount": payload["amount"],
-            "bagType": payload.get("bagType"), "bagSize": payload.get("bagSize"),
+            "bagType": payload.get("bagType"), "gsm": payload.get("gsm"), "bagColor": payload.get("bagColor"), "bagSize": payload.get("bagSize"),
             "printingColor": payload.get("printingColor"), "ratePerBag": payload.get("ratePerBag"),
             "advancePaid": advance_paid, "remainingAmount": remaining_money(payload["amount"], advance_paid),
             "orderDate": timestamp.date().isoformat(), "expectedDelivery": payload["expectedDelivery"],

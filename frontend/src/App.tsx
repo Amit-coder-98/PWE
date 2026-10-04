@@ -49,12 +49,14 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { DesignWorkspace } from "./components/DesignWorkspace";
 import { PaymentProofWorkspace } from "./components/PaymentProofWorkspace";
 import { OrderProgress } from "./components/OrderProgress";
+import { BagTypeSelect } from "./components/BagTypeSelect";
 import { StatusBadge } from "./components/StatusBadge";
 import { ToastHost } from "./components/ToastHost";
 import { api, ApiError } from "./lib/api";
 import { formatMoney as money, orderTotal, remainingAmount } from "./lib/money";
 import { artworkAccess } from "./lib/artwork";
 import { ordersByBooker } from "./lib/orderBookings";
+import { bagSpecification } from "./lib/bagTypes";
 import { formatDate as date, formatDateTime as dateTime } from "./lib/dateTime";
 import {
   activeStages,
@@ -1659,12 +1661,14 @@ function downloadCustomerOrderSheet(customer: Customer, orders: Order[]) {
     ["GST number", customer.gstNumber ?? ""],
     ["Address", customer.address],
     [],
-    ["Order number", "Order date", "Delivery date", "Bag type", "Size", "Printing colour", "Quantity", "Rate per bag", "Total amount", "Advance paid", "Due amount", "Order status", "Current department", "Notes"],
+    ["Order number", "Order date", "Delivery date", "Bag type", "GSM (g/m²)", "Bag color", "Size", "Printing colour", "Quantity", "Rate per bag", "Total amount", "Advance paid", "Due amount", "Order status", "Current department", "Notes"],
     ...orders.map((order) => [
       order.orderNumber,
       date(order.orderDate),
       date(order.expectedDelivery),
       order.bagType ?? order.product,
+      order.gsm ?? "",
+      order.bagColor ?? "",
       order.bagSize ?? "",
       order.printingColor ?? "",
       order.quantity,
@@ -1760,7 +1764,7 @@ function CustomerProfilePage() {
 }
 
 function NewOrderPage() {
-  const { customers, createOrder } = useApp();
+  const { customers, createOrder, orders } = useApp();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1832,6 +1836,7 @@ function NewOrderPage() {
         quantity: Number(quantityValue),
         amount: totalValue,
         bagType: String(form.get("bagType")),
+        ...bagSpecification(form),
         bagSize: String(form.get("bagSize")),
         printingColor: String(form.get("printingColor")),
         ratePerBag: Number(rateValue),
@@ -2026,17 +2031,9 @@ function NewOrderPage() {
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label>
-              <span className="label mt-4">Type of bag *</span>
-              <input className="field" name="bagType" list="bag-types" placeholder="Select or type bag type" required />
-              <datalist id="bag-types">
-                <option value="PP woven bag" />
-                <option value="Non-woven bag" />
-                <option value="Cotton bag" />
-                <option value="Jute bag" />
-                <option value="Paper bag" />
-              </datalist>
-            </label>
+            <BagTypeSelect orders={orders} />
+            <Field name="gsm" label="GSM (Grams per Square Meter)" type="number" min="0.01" step="any" inputMode="decimal" placeholder="Example: 65" />
+            <Field name="bagColor" label="Color of bag" maxLength={100} placeholder="Example: White, blue or natural" />
             <Field name="bagSize" label="Bag size *" placeholder="Example: 25 kg or 20 × 30 inch" required />
             <Field name="printingColor" label="Colour of printing *" placeholder="Example: Blue and green" required />
             <label>
@@ -2271,6 +2268,7 @@ function OrderDetailPage() {
         quantity: updatedQuantity,
         amount: updatedAmount,
         bagType: String(form.get("bagType")),
+        ...bagSpecification(form),
         bagSize: String(form.get("bagSize")),
         printingColor: String(form.get("printingColor")),
         ratePerBag: updatedRate,
@@ -2282,7 +2280,9 @@ function OrderDetailPage() {
         priority: String(form.get("priority")),
         notes: String(form.get("notes")) || undefined,
       });
-      setOrder(updated);
+      // The edit response is a compact order document. Reload the detail so
+      // image lists, payment proofs and the new activity event stay visible.
+      setOrder(await api.order(updated.id));
       setEditOpen(false);
       await reload();
       toast("Order details updated.");
@@ -2439,6 +2439,11 @@ function OrderDetailPage() {
           <h2 className="flex items-center gap-2 font-bold text-navy-900"><Building2 className="size-5 text-sky-700" aria-hidden="true" />Customer and order</h2>
           <dl className="mt-3">
             <Detail label="Contact" value={order.contactPerson} />
+            <Detail label="Type of bag" value={order.bagType ?? order.product} />
+            <Detail label="GSM" value={order.gsm != null ? `${order.gsm} g/m²` : "Not recorded"} />
+            <Detail label="Color of bag" value={order.bagColor || "Not recorded"} />
+            <Detail label="Bag size" value={order.bagSize || "Not recorded"} />
+            <Detail label="Printing color" value={order.printingColor || "Not recorded"} />
             {order.phone && <Detail label="Phone" value={order.phone} />}
             <Detail label="Order date" value={date(order.orderDate)} />
             <Detail label="Delivery" value={date(order.expectedDelivery)} />
@@ -2513,7 +2518,9 @@ function OrderDetailPage() {
             </div>
             <h3 className="mt-6 border-t border-slate-200 pt-5 font-bold text-navy-900">Bag details</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field name="bagType" label="Type of bag *" defaultValue={order.bagType ?? order.product} required />
+              <BagTypeSelect orders={orders} defaultValue={order.bagType ?? order.product} />
+              <Field name="gsm" label="GSM (Grams per Square Meter)" type="number" min="0.01" step="any" inputMode="decimal" defaultValue={order.gsm ?? undefined} placeholder="Example: 65" />
+              <Field name="bagColor" label="Color of bag" maxLength={100} defaultValue={order.bagColor ?? undefined} placeholder="Example: White, blue or natural" />
               <Field name="bagSize" label="Bag size *" defaultValue={order.bagSize} required />
               <Field name="printingColor" label="Colour of printing *" defaultValue={order.printingColor} required />
               <label><span className="label mt-4">Rate per bag (₹) *</span><input className="field" type="number" min="0" step="0.01" required value={editRate} onChange={(event) => setEditRate(event.target.value)} /></label>

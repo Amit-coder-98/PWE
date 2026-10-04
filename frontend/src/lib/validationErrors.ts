@@ -12,6 +12,9 @@ const fieldLabels: Record<string, string> = {
   alternativePhone: "Alternative phone",
   customerId: "Customer",
   product: "Type of bag",
+  bagType: "Type of bag",
+  gsm: "GSM",
+  bagColor: "Color of bag",
   gstNumber: "GST number",
   expectedDelivery: "Delivery date",
 };

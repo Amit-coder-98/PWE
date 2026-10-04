@@ -13,6 +13,7 @@
     "test:artwork": "node --experimental-strip-types --test tests/artwork.test.mjs",
     "test:workflow": "node --experimental-strip-types --test tests/workflow-focus.test.mjs",
     "test:feedback": "node --experimental-strip-types --test tests/client-feedback.test.mjs",
+    "test:bags": "node --experimental-strip-types --test tests/bag-types.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

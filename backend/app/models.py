@@ -135,6 +135,8 @@ class OrderCreate(BaseModel):
     quantity: int = Field(gt=0, le=10_000_000)
     amount: Money
     bagType: str | None = Field(default=None, max_length=100)
+    gsm: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    bagColor: str | None = Field(default=None, max_length=100)
     bagSize: str | None = Field(default=None, max_length=100)
     printingColor: str | None = Field(default=None, max_length=100)
     ratePerBag: Money | None = None
@@ -153,6 +155,8 @@ class OrderUpdate(BaseModel):
     quantity: int = Field(gt=0, le=10_000_000)
     amount: Money
     bagType: str | None = Field(default=None, max_length=100)
+    gsm: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    bagColor: str | None = Field(default=None, max_length=100)
     bagSize: str | None = Field(default=None, max_length=100)
     printingColor: str | None = Field(default=None, max_length=100)
     ratePerBag: Money | None = None
@@ -252,6 +256,8 @@ class OrderDocument(BaseModel):
     quantity: int
     amount: Money
     bagType: str | None = None
+    gsm: float | None = None
+    bagColor: str | None = None
     bagSize: str | None = None
     printingColor: str | None = None
     ratePerBag: Money | None = None

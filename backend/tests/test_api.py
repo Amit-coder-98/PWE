@@ -346,6 +346,70 @@ def test_admin_can_edit_active_order_booking_details(system):
     assert saved["version"] == 2
 
 
+@pytest.mark.parametrize("role", ["admin", "marketing"])
+def test_bag_specification_create_edit_list_and_detail(system, role):
+    client, repository = system
+    headers = login(client)
+    existing = create_order(client, headers)
+    if role == "marketing":
+        add_staff(repository, "marketing", "marketing", "marketing@test.example.com")
+        client.post("/api/auth/logout", headers=headers)
+        headers = login(client, "marketing@test.example.com")
+    payload = {"customerId": existing["customerId"], "product": "D cut 65gsm", "bagType": "D cut 65gsm", "gsm": 65,
+               "bagColor": "White", "printingColor": "Blue", "quantity": 1200, "amount": 8940, "ratePerBag": 7.45, "expectedDelivery": "2026-10-10"}
+    response = client.post("/api/orders", headers=headers, json=payload)
+    assert response.status_code == 200, response.text
+    created = response.json()
+    assert created["gsm"] == 65
+    assert created["bagColor"] == "White"
+    assert repository.get_order(created["id"])["gsm"] == 65
+    for path in ["/api/orders", f"/api/orders/{created['id']}"]:
+        result = client.get(path).json()
+        item = next(order for order in result if order["id"] == created["id"]) if isinstance(result, list) else result
+        assert (item["bagColor"], item["printingColor"], item["gsm"]) == ("White", "Blue", 65)
+    updated = client.patch(f"/api/orders/{created['id']}", headers=headers,
+                           json={**payload, "expectedVersion": created["version"], "gsm": 80.5, "bagColor": "Natural"})
+    assert updated.status_code == 200, updated.text
+    assert (updated.json()["gsm"], updated.json()["bagColor"], updated.json()["printingColor"]) == (80.5, "Natural", "Blue")
+    omitted = {key: value for key, value in payload.items() if key not in {"gsm", "bagColor"}}
+    unchanged = client.patch(f"/api/orders/{created['id']}", headers=headers,
+                             json={**omitted, "expectedVersion": updated.json()["version"]})
+    assert unchanged.status_code == 200, unchanged.text
+    assert (unchanged.json()["gsm"], unchanged.json()["bagColor"]) == (80.5, "Natural")
+    cleared = client.patch(f"/api/orders/{created['id']}", headers=headers,
+                           json={**payload, "expectedVersion": unchanged.json()["version"], "gsm": None, "bagColor": None})
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["gsm"] is None
+    assert cleared.json()["bagColor"] is None
+
+
+@pytest.mark.parametrize("field,value", [("gsm", 0), ("gsm", -1), ("gsm", "not a number"), ("gsm", "Infinity"), ("gsm", "NaN"), ("bagColor", "x" * 101)])
+def test_invalid_bag_specification_is_rejected_without_creating_records(system, field, value):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    payload = {"customerId": order["customerId"], "product": "Paper bag", "quantity": 100, "amount": 500, "expectedDelivery": "2026-10-10", field: value}
+    response = client.post("/api/orders", headers=headers, json=payload)
+    assert response.status_code == 422, response.text
+    assert response.json()["fields"][0]["field"] == field
+    assert len(repository.list_orders()) == 1
+
+
+def test_legacy_orders_remain_readable_and_keep_existing_type(system):
+    client, repository = system
+    headers = login(client)
+    order = create_order(client, headers)
+    repository.db.orders.update_one({"id": order["id"]}, {"$set": {"bagType": "PP woven bag"}, "$unset": {"gsm": "", "bagColor": ""}})
+    listed = client.get("/api/orders").json()[0]
+    assert listed["bagType"] == "PP woven bag"
+    assert listed["gsm"] is None and listed["bagColor"] is None
+    assert "gsm" not in repository.get_order(order["id"])
+    edited = client.patch(f"/api/orders/{order['id']}", headers=headers,
+                          json={"customerId": order["customerId"], "product": "PP woven bag", "bagType": "PP woven bag", "quantity": order["quantity"], "amount": order["amount"], "expectedDelivery": order["expectedDelivery"], "expectedVersion": order["version"]})
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["bagType"] == "PP woven bag"
+
+
 @pytest.mark.parametrize("rate,quantity,amount,advance,due", [
     (7.45, 1200, 8940, 0, 8940),
     (7.45, 3, 22.35, 10.25, 12.10),

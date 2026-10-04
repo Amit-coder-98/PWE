@@ -149,6 +149,8 @@ export const api = {
     quantity: number;
     amount: number;
     bagType?: string;
+    gsm?: number | null;
+    bagColor?: string | null;
     bagSize?: string;
     printingColor?: string;
     ratePerBag?: number;
@@ -170,6 +172,8 @@ export const api = {
     quantity: number;
     amount: number;
     bagType?: string;
+    gsm?: number | null;
+    bagColor?: string | null;
     bagSize?: string;
     printingColor?: string;
     ratePerBag?: number;

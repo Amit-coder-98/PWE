@@ -13,6 +13,7 @@
     "test:artwork": "npm run test:artwork --workspace=frontend",
     "test:workflow": "npm run test:workflow --workspace=frontend",
     "test:feedback": "npm run test:feedback --workspace=frontend",
+    "test:bags": "npm run test:bags --workspace=frontend",
     "preview": "npm run preview --workspace=frontend"
   }
 }
